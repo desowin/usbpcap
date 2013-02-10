@@ -1,13 +1,13 @@
 #include "Windows.h"
 
-1				VERSIONINFO
-FILEVERSION    	1,0,1,75
-PRODUCTVERSION 	1,0,1,75
-FILEFLAGSMASK  	VS_FFI_FILEFLAGSMASK
-FILEFLAGS      	(VS_FF_PRIVATEBUILD|VS_FF_PRERELEASE|VS_FF_DEBUG)
-FILEOS         	VOS__WINDOWS32
-FILETYPE       	VFT_APP
-FILESUBTYPE    	VFT2_UNKNOWN
+1                  VERSIONINFO
+FILEVERSION        1,0,1,75
+PRODUCTVERSION     1,0,1,75
+FILEFLAGSMASK      VS_FFI_FILEFLAGSMASK
+FILEFLAGS          (VS_FF_PRIVATEBUILD|VS_FF_PRERELEASE|VS_FF_DEBUG)
+FILEOS             VOS__WINDOWS32
+FILETYPE           VFT_APP
+FILESUBTYPE        VFT2_UNKNOWN
 BEGIN
     BLOCK "StringFileInfo"
     BEGIN
@@ -17,7 +17,7 @@ BEGIN
             VALUE "FileDescription",  "Driver for DkURBMon"
             VALUE "FileVersion",      "1.0.1.75"
             VALUE "InternalName",     "DkSysPort"
-			VALUE "LegalCopyright",	  "(c) 2012 Deka Prikarna A"
+            VALUE "LegalCopyright",   "(c) 2012 Deka Prikarna A"
             VALUE "OriginalFilename", "DkSysPort"
             VALUE "ProductName",      "Simple URB Monitor driver"
             VALUE "ProductVersion",   "1.0.1.75"

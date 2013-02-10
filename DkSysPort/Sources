@@ -6,21 +6,21 @@ TARGETTYPE = DRIVER
 
 DRIVERTYPE = WDM
 
-TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib			\
-			 $(DDK_LIB_PATH)\Ntstrsafe.lib		\
-			 $(DDK_LIB_PATH)\USBd.lib			 
-			
-INCLUDES = $(DDK_INC_PATH); \
-		   $(WDM_INC_PATH);
+TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib \
+             $(DDK_LIB_PATH)\Ntstrsafe.lib \
+             $(DDK_LIB_PATH)\USBd.lib
 
-SOURCES	 = DkSysPort.c	\
-		   DkQue.c		\
-		   DkGenReq.c	\
-		   DkDevCtl.c	\
-		   DkFltMgr.c	\
-		   DkPnp.c		\
-		   DkPower.c	\
-		   DkUSBFuncs.c	\
-		   Res.rc
-		   
+INCLUDES = $(DDK_INC_PATH); \
+           $(WDM_INC_PATH);
+
+SOURCES = DkSysPort.c  \
+          DkQue.c      \
+          DkGenReq.c   \
+          DkDevCtl.c   \
+          DkFltMgr.c   \
+          DkPnp.c      \
+          DkPower.c    \
+          DkUSBFuncs.c \
+          Res.rc
+
 
