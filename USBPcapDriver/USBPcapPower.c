@@ -1,4 +1,4 @@
-#include "DkSysPort.h"
+#include "USBPcapMain.h"
 
 extern PDEVICE_OBJECT    g_pThisDevObj;
 

@@ -1,0 +1,31 @@
+#include "Windows.h"
+
+1                  VERSIONINFO
+FILEVERSION        0,0,0,1
+PRODUCTVERSION     0,0,0,1
+FILEFLAGSMASK      VS_FFI_FILEFLAGSMASK
+FILEFLAGS          (VS_FF_PRIVATEBUILD|VS_FF_PRERELEASE|VS_FF_DEBUG)
+FILEOS             VOS__WINDOWS32
+FILETYPE           VFT_APP
+FILESUBTYPE        VFT2_UNKNOWN
+BEGIN
+    BLOCK "StringFileInfo"
+    BEGIN
+        BLOCK "040904E4"
+        BEGIN
+            VALUE "CompanyName",      "USBPcap"
+            VALUE "FileDescription",  "USBPcap Driver"
+            VALUE "FileVersion",      "0.0.0.1"
+            VALUE "InternalName",     "USBPcapDriver"
+            VALUE "LegalCopyright",   "(c) 2013 Tomasz Mon"
+            VALUE "OriginalFilename", "USBPcapDriver"
+            VALUE "ProductName",      "USBPcap Sniffer Driver"
+            VALUE "ProductVersion",   "0.0.0.1"
+        END
+    END
+
+    BLOCK "VarFileInfo"
+    BEGIN
+        VALUE "Translation", 0x409, 1252
+    END
+END

@@ -1,5 +1,5 @@
-#ifndef __DKSYSPORT_SHARED__
-#define __DKSYSPORT_SHARED__
+#ifndef USBPCAP_H
+#define USBPCAP_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -37,4 +37,4 @@ typedef struct DKPORT_DAT_Tag {
 }
 #endif
 
-#endif  // End of __DKSYSPORT_SHARED__
+#endif /* USBPCAP_H */

@@ -1,0 +1,54 @@
+[Version]
+Signature   = "$WINDOWS NT$"
+Class       = System
+ClassGuid   = {4D36E97D-E325-11CE-BFC1-08002BE10318}
+Provider    = %PROVIDER%
+
+[DestinationDirs]
+DefaultDestDir = 12
+
+[SourceDisksNames]
+1 = %DiskId1%,,,"."
+
+[SourceDisksFiles]
+USBPcapDriver.sys = 1,,
+
+[Manufacturer]
+%StdMfg% = Standard, NT$ARCH$
+
+[Standard.NT$ARCH$]
+%USBPcap.DeviceDesc% = USBPcap_Device, USBPcap
+
+[USBPcap_Device.NT]
+CopyFiles = Drivers_Dir
+
+[USBPcap_Device.NT.HW]
+AddReg = USBPcap_Device.NT.AddReg
+
+[USBPcap_Device.NT.AddReg]
+HKR,,DeviceCharacteristics,0x10001,0x0100         ; Use same security checks on relative opens
+HKR,,Security,,"D:P(A;;GA;;;BA)(A;;GA;;;SY)"      ; Allow generic-all access to Built-in administrators and Local system
+
+[Drivers_Dir]
+USBPcapDriver.sys
+
+[USBPcap_Device.NT.Services]
+AddService = USBPcap,%SpSvcInst_AssocSvc%, USBPcap_Service_Inst
+
+[USBPcap_Service_Inst]
+DisplayName    = %USBPcap.SvcDesc%
+ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
+StartType      = 3               ; SERVICE_DEMAND_START
+ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ServiceBinary  = %12%\USBPcapDriver.sys
+LoadOrderGroup = Extended Base
+
+
+[Strings]
+SpSvcInst_AssocSvc   = 0x00000002
+PROVIDER             = "USBPcap"
+StdMfg               = "USBPcap Developers"
+DiskId1              = "USBPcap Installation Disk #1"
+USBPcap.DeviceDesc    = "USBPcap System Driver"
+USBPcap.SvcDesc       = "USBPcap Driver Service"
+

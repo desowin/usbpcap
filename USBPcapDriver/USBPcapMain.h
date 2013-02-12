@@ -1,12 +1,11 @@
 /**************************************************************************
  *
- * File DkSysPort.h
  * Define all structures and functions needed by this driver
  *
  **************************************************************************/
 
-#ifndef __DKSYSPORT_H__
-#define __DKSYSPORT_H__
+#ifndef USBPCAP_MAIN_H
+#define USBPCAP_MAIN_H
 
 
 ////////////////////////////////////////////////////////////
@@ -22,8 +21,8 @@
 #define DKPORT_DEVLINK_STR  L"\\DosDevices\\Global\\DkSysPort" // Link name string
 #define DKPORT_MTAG         (ULONG)'dk3A' // To tag memory allocation if any
 
-#include "DkQue.h"
-#include "Inc\Shared.h"
+#include "USBPcapQueue.h"
+#include "include\USBPcap.h"
 
 
 ////////////////////////////////////////////////////////////
@@ -166,4 +165,4 @@ NTSTATUS DkTgtCompletePendedIrp(PWCH szFuncName, ULONG ulFuncNameByteLen, PUCHAR
 PCHAR DkDbgGetUSBFunc(USHORT usFuncCode);
 PWCHAR DkDbgGetUSBFuncW(USHORT usFuncCode);
 
-#endif // End of __DKSYSPORT_H__
+#endif /* USBPCAP_MAIN_H */

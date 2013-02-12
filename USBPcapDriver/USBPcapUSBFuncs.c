@@ -1,4 +1,4 @@
-#include "DkSysPort.h"
+#include "USBPcapMain.h"
 
 PCHAR DkDbgGetUSBFunc(USHORT usFuncCode)
 {

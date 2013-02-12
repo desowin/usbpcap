@@ -1,8 +1,8 @@
-#ifndef __DKSYSPORTQUE_H__
-#define __DKSYSPORTQUE_H__
+#ifndef USBPCAP_QUEUE_H
+#define USBPCAP_QUEUE_H
 
 #include "Wdm.h"
-#include "Inc\Shared.h"
+#include "include\USBPcap.h"
 
 __drv_raisesIRQL(DISPATCH_LEVEL)
 __drv_maxIRQL(DISPATCH_LEVEL)
@@ -36,5 +36,5 @@ VOID DkQueDel(PDKQUE_DAT pItem);
 
 VOID DkQueCleanUpData(VOID);
 
-#endif   // End of __DKSYSPORTQUE_H__
+#endif /* USBPCAP_QUEUE_H */
 

@@ -1,5 +1,5 @@
-#include "DkSysPort.h"
-#include "DkQue.h"
+#include "USBPcapMain.h"
+#include "USBPcapQueue.h"
 
 VOID DkCsqInsertIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
 {
