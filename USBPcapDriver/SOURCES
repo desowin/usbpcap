@@ -17,13 +17,14 @@ TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib \
 INCLUDES = $(DDK_INC_PATH); \
            $(WDM_INC_PATH);
 
-SOURCES = USBPcap.rc             \
-          USBPcapDeviceControl.c \
-          USBPcapFilterManager.c \
-          USBPcapGenReq.c        \
-          USBPcapMain.c          \
-          USBPcapPnP.c           \
-          USBPcapPower.c         \
-          USBPcapQueue.c         \
+SOURCES = USBPcap.rc               \
+          USBPcapDeviceControl.c   \
+          USBPcapFilterManager.c   \
+          USBPcapGenReq.c          \
+          USBPcapHelperFunctions.c \
+          USBPcapMain.c            \
+          USBPcapPnP.c             \
+          USBPcapPower.c           \
+          USBPcapQueue.c           \
           USBPcapUSBFuncs.c
 

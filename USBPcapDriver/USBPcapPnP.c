@@ -1,4 +1,5 @@
 #include "USBPcapMain.h"
+#include "USBPcapHelperFunctions.h"
 
 //
 // External global variables defined in DkSysPort.c
@@ -214,12 +215,21 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
     switch (pStack->MinorFunction)
     {
         case IRP_MN_START_DEVICE:
+            /* IRP_MN_START_DEVICE is sent at PASSIVE_LEVEL */
             DkDbgStr("IRP_MN_START_DEVICE");
 
             ntStat = DkForwardAndWait(pDevExt->pNextTgtDevObj, pIrp);
             IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
+            {
+                USHORT address;
+                USBPcapGetDeviceUSBAddress(pDevExt->pNextHubFlt,
+                                           pDevExt->pNextTgtDevObj,
+                                           &address);
+
+                DkDbgVal("Started device", address);
+            }
             return ntStat;
 
 
@@ -255,6 +265,7 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
     NTSTATUS             ntStat = STATUS_SUCCESS;
     PDEVICE_RELATIONS    pDevRel = NULL;
 
+    /* PnP manager sends this at PASSIVE_LEVEL */
     switch (pStack->Parameters.QueryDeviceRelations.Type)
     {
         case BusRelations:
@@ -271,6 +282,8 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                 pDevRel = (PDEVICE_RELATIONS) pIrp->IoStatus.Information;
                 if (pDevRel)
                 {
+                    USBPcapPrintUSBPChildrenInformation(pDevExt->pNextHubFlt);
+
                     DkDbgVal("Child(s) number", pDevRel->Count);
                     if ((pDevRel->Count > 0) &&
                         (pDevRel->Count > pDevExt->ulTgtIndex))

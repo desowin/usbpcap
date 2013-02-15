@@ -1,4 +1,5 @@
 #include "USBPcapMain.h"
+#include "USBPcapHelperFunctions.h"
 
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
@@ -74,6 +75,7 @@ VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt)
         pDevExt->pHubFlt = NULL;
     }
 }
+
 
 
 ////////////////////////////////////////////////////////////////////////////

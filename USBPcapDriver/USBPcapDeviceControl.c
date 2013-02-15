@@ -184,7 +184,9 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
 
     // Our interest is IOCTL_INTERNAL_USB_SUBMIT_URB, where USB device driver send URB to
     // it's USB bus driver
-    if (pStack->Parameters.DeviceIoControl.IoControlCode == IOCTL_INTERNAL_USB_SUBMIT_URB){
+    if (pStack->Parameters.DeviceIoControl.IoControlCode == IOCTL_INTERNAL_USB_SUBMIT_URB)
+    {
+        /* code here should cope with DISPATCH_LEVEL */
 
         // URB is collected BEFORE forward to bus driver or next lower object
         pUrb = (PURB) pStack->Parameters.Others.Argument1;
