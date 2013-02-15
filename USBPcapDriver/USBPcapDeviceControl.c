@@ -1,5 +1,6 @@
 #include "USBPcapMain.h"
 #include "include\USBPcap.h"
+#include "USBPcapURB.h"
 
 extern PDEVICE_OBJECT    g_pThisDevObj;
 
@@ -196,6 +197,8 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
                 DkDbgGetUSBFuncW(pUrb->UrbHeader.Function));
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 1);
+
+            USBPcapAnalyzeURB(pUrb, FALSE);
         }
 
         // Forward this request to bus driver or next lower object
@@ -241,6 +244,8 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
                 DkDbgGetUSBFuncW(pUrb->UrbHeader.Function));
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 0);
+
+            USBPcapAnalyzeURB(pUrb, TRUE);
         }
         else
         {
