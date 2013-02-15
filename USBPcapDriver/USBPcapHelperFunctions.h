@@ -22,15 +22,8 @@
 NTSTATUS USBPcapGetTargetDevicePdo(IN PDEVICE_OBJECT DeviceObject,
                                    OUT PDEVICE_OBJECT *pdo);
 
-NTSTATUS USBPcapGetTargetDevicePort(PDEVICE_OBJECT pdo_device,
-                                    PULONG port);
-
 NTSTATUS USBPcapGetNumberOfPorts(PDEVICE_OBJECT parent,
                                  PULONG numberOfPorts);
-
-NTSTATUS USBPcapGetNodeInformation(PDEVICE_OBJECT hub,
-                                   ULONG port,
-                                   USB_NODE_CONNECTION_INFORMATION *info);
 
 #if DBG
 NTSTATUS USBPcapPrintUSBPChildrenInformation(PDEVICE_OBJECT hub);
@@ -44,9 +37,7 @@ NTSTATUS USBPcapGetDeviceUSBAddress(PDEVICE_OBJECT hub,
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, USBPcapGetTargetDevicePdo)
-#pragma alloc_text (PAGE, USBPcapGetTargetDevicePort)
 #pragma alloc_text (PAGE, USBPcapGetNumberOfPorts)
-#pragma alloc_text (PAGE, USBPcapGetNodeInformation)
 #if DBG
 #pragma alloc_text (PAGE, USBPcapPrintUSBPChildrenInformation)
 #endif

@@ -89,8 +89,8 @@ VOID DkCompleteRequest(PIRP pIrp, NTSTATUS resStat, UINT_PTR uiInfo);
 ///////////////////////////////////////////////////////////////////////////
 // Macro to show some "debugging messages" to a debugging tool
 //
-#define DkDbgStr(a)    KdPrint(("DkSysPort, %s(): %s\n", __FUNCTION__, a))
-#define DkDbgVal(a, b) KdPrint(("DkSysPort, %s(): %s ("#b" = 0x%X)\n", __FUNCTION__, a, b))
+#define DkDbgStr(a)    KdPrint(("USBPcap, %s(): %s\n", __FUNCTION__, a))
+#define DkDbgVal(a, b) KdPrint(("USBPcap, %s(): %s ("#b" = 0x%X)\n", __FUNCTION__, a, b))
 
 
 ///////////////////////////////////////////////////////////////////////////

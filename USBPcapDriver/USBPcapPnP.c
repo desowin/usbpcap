@@ -224,11 +224,20 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
 
             {
                 USHORT address;
-                USBPcapGetDeviceUSBAddress(pDevExt->pNextHubFlt,
-                                           pDevExt->pNextTgtDevObj,
-                                           &address);
+                NTSTATUS status;
 
-                DkDbgVal("Started device", address);
+                status = USBPcapGetDeviceUSBAddress(pDevExt->pNextHubFlt,
+                                                    pDevExt->pNextTgtDevObj,
+                                                    &address);
+
+                if (NT_SUCCESS(status))
+                {
+                    DkDbgVal("Started device", address);
+                }
+                else
+                {
+                    DkDbgStr("Failed to get address of started device");
+                }
             }
             return ntStat;
 
