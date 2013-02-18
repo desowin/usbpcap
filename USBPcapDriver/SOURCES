@@ -12,6 +12,7 @@ NTTARGETFILES=$(TARGETPATH)\%CPU%\$(INF_NAME).inf
 
 TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib \
              $(DDK_LIB_PATH)\Ntstrsafe.lib \
+             $(DDK_LIB_PATH)\Ntoskrnl.lib \
              $(DDK_LIB_PATH)\USBd.lib
 
 INCLUDES = $(DDK_INC_PATH); \
@@ -26,6 +27,7 @@ SOURCES = USBPcap.rc               \
           USBPcapPnP.c             \
           USBPcapPower.c           \
           USBPcapQueue.c           \
+          USBPcapTables.c          \
           USBPcapURB.c             \
           USBPcapUSBFuncs.c
 

@@ -16,8 +16,41 @@
 
 #include "USBPcapMain.h"
 #include "USBPcapURB.h"
+#include "USBPcapTables.h"
 
 #include <stddef.h> /* Required for offsetof macro */
+
+BOOLEAN USBPcapRetrieveEndpointInfo(IN PROOTHUB_DATA pRootHub,
+                                    IN USBD_PIPE_HANDLE handle,
+                                    PUSBPCAP_ENDPOINT_INFO pInfo)
+{
+    KIRQL irql;
+    PUSBPCAP_ENDPOINT_INFO info;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&pRootHub->endpointTableSpinLock, &irql);
+    info = USBPcapGetEndpointInfo(pRootHub->endpointTable, handle);
+    if (info != NULL)
+    {
+        found = TRUE;
+        memcpy(pInfo, info, sizeof(USBPCAP_ENDPOINT_INFO));
+    }
+    KeReleaseSpinLock(&pRootHub->endpointTableSpinLock, irql);
+
+    if (found == TRUE)
+    {
+        DkDbgVal("Found endpoint info", handle);
+        DkDbgVal("", pInfo->type);
+        DkDbgVal("", pInfo->endpointAddress);
+        DkDbgVal("", pInfo->deviceAddress);
+    }
+    else
+    {
+        DkDbgVal("Unable to find endpoint info", handle);
+    }
+
+    return found;
+}
 
 #if DBG
 VOID USBPcapPrintChars(PCHAR text, PUCHAR buffer, ULONG length)
@@ -59,11 +92,12 @@ VOID USBPcapPrintChars(PCHAR text, PUCHAR buffer, ULONG length)
  * post is FALSE when the request is being on its way to the bus driver
  * post is TRUE when the request returns from the bus driver
  */
-VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post)
+VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post, PROOTHUB_DATA pRootHub)
 {
     struct _URB_HEADER *header;
 
     ASSERT(pUrb != NULL);
+    ASSERT(pRootHub != NULL);
 
     header = (struct _URB_HEADER*)pUrb;
 
@@ -75,6 +109,8 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post)
             USHORT interfaces_len;
             struct _URB_SELECT_CONFIGURATION *pSelectConfiguration;
             PUSBD_INTERFACE_INFORMATION pInterface;
+            UCHAR deviceAddress;
+            KIRQL irql;
 
             if (post == FALSE)
             {
@@ -83,6 +119,9 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post)
                 * after the fields are set by host controller driver */
                 break;
             }
+
+            /* FIXME: Get device address */
+            deviceAddress = 255;
 
             pSelectConfiguration = (struct _URB_SELECT_CONFIGURATION*)pUrb;
             pInterface = &pSelectConfiguration->Interface;
@@ -116,6 +155,14 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post)
                             Pipe->EndpointAddress,
                             Pipe->PipeType,
                             Pipe->PipeHandle));
+
+                    KeAcquireSpinLock(&pRootHub->endpointTableSpinLock,
+                                      &irql);
+                    USBPcapAddEndpointInfo(pRootHub->endpointTable,
+                                           Pipe,
+                                           deviceAddress);
+                    KeReleaseSpinLock(&pRootHub->endpointTableSpinLock,
+                                      irql);
                 }
 
                 /* Advance to next interface */
@@ -124,7 +171,6 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post)
                 pInterface = (PUSBD_INTERFACE_INFORMATION)
                                  ((PUCHAR)pInterface + pInterface->Length);
             }
-
             break;
         }
 
@@ -170,12 +216,17 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post)
 
         case URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER:
         {
-            struct _URB_BULK_OR_INTERRUPT_TRANSFER *transfer;
+            struct _URB_BULK_OR_INTERRUPT_TRANSFER  *transfer;
+            USBPCAP_ENDPOINT_INFO                   info;
+            BOOLEAN                                 epFound;
 
             transfer = (struct _URB_BULK_OR_INTERRUPT_TRANSFER*)pUrb;
 
             DkDbgStr("URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER");
             DkDbgVal("", transfer->PipeHandle);
+            epFound = USBPcapRetrieveEndpointInfo(pRootHub,
+                                                  transfer->PipeHandle,
+                                                  &info);
             DkDbgVal("", transfer->TransferFlags);
             DkDbgVal("", transfer->TransferBufferLength);
             DkDbgVal("", transfer->TransferBuffer);

@@ -1,5 +1,6 @@
 #include "USBPcapMain.h"
 #include "USBPcapHelperFunctions.h"
+#include "USBPcapTables.h"
 
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
@@ -11,6 +12,20 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp)
     PFILE_OBJECT      pFlObj = NULL;
     PDEVICE_OBJECT    pTgtDevObj = NULL;
 
+
+    /* Allocate ROOTHUB_DATA */
+    pDevExt->pData = ExAllocatePoolWithTag(NonPagedPool,
+                                           sizeof(ROOTHUB_DATA),
+                                           DKPORT_MTAG);
+    if (pDevExt->pData != NULL)
+    {
+        KeInitializeSpinLock(&pDevExt->pData->endpointTableSpinLock);
+        pDevExt->pData->endpointTable = USBPcapInitializeEndpointTable(NULL);
+    }
+    else
+    {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
 
     // 1. Get device object pointer to attach to
     RtlInitUnicodeString(&usTgtName, (PWSTR) pIrp->AssociatedIrp.SystemBuffer);
@@ -73,6 +88,12 @@ VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt)
     {
         IoDeleteDevice(pDevExt->pHubFlt);
         pDevExt->pHubFlt = NULL;
+    }
+    if (pDevExt->pData)
+    {
+        USBPcapFreeEndpointTable(pDevExt->pData->endpointTable);
+        ExFreePool(pDevExt->pData);
+        pDevExt->pData = NULL;
     }
 }
 

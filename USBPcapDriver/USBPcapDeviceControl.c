@@ -198,7 +198,7 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 1);
 
-            USBPcapAnalyzeURB(pUrb, FALSE);
+            USBPcapAnalyzeURB(pUrb, FALSE, pDevExt->pData);
         }
 
         // Forward this request to bus driver or next lower object
@@ -233,6 +233,8 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
     if (pIrp->PendingReturned)
         IoMarkIrpPending(pIrp);
 
+    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
+
     // URB is collected AFTER forward to bus driver or next lower object
     if (NT_SUCCESS(pIrp->IoStatus.Status))
     {
@@ -245,7 +247,7 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 0);
 
-            USBPcapAnalyzeURB(pUrb, TRUE);
+            USBPcapAnalyzeURB(pUrb, TRUE, pDevExt->pData);
         }
         else
         {
@@ -257,7 +259,6 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
         DkDbgVal("Bus driver returned an error!", pIrp->IoStatus.Status);
     }
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
     IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
 
     return STATUS_SUCCESS;

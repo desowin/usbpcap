@@ -25,6 +25,12 @@
 #include "include\USBPcap.h"
 
 
+typedef struct _ROOTHUB_DATA
+{
+    KSPIN_LOCK         endpointTableSpinLock;
+    PRTL_GENERIC_TABLE endpointTable;
+} ROOTHUB_DATA, *PROOTHUB_DATA;
+
 ////////////////////////////////////////////////////////////
 // Device extension structure for this object
 //
@@ -42,6 +48,8 @@ typedef struct DEVICE_EXTENSION_Tag {
     IO_CSQ          ioCsq;           // I/O Cancel-Safe object
     KSPIN_LOCK      csqSpinLock;     // Spin lock object for I/O Cancel-Safe
     ULONG           ulTgtIndex;      // Index of target device used when receive IRP_MN_QUERY_DEVICE_RELATION
+
+    PROOTHUB_DATA   pData;           // Roothub data
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
 
