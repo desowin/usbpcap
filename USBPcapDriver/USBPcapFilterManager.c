@@ -13,9 +13,9 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp)
     PDEVICE_OBJECT    pTgtDevObj = NULL;
 
 
-    /* Allocate ROOTHUB_DATA */
+    /* Allocate USBPCAP_ROOTHUB_DATA */
     pDevExt->pData = ExAllocatePoolWithTag(NonPagedPool,
-                                           sizeof(ROOTHUB_DATA),
+                                           sizeof(USBPCAP_ROOTHUB_DATA),
                                            DKPORT_MTAG);
     if (pDevExt->pData != NULL)
     {
@@ -106,6 +106,20 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pDevExt, PDEVICE_OBJECT pTgtDevO
 {
     NTSTATUS  ntStat = STATUS_SUCCESS;
 
+    /* Allocate USBPCAP_DEVICE_DATA */
+    pDevExt->pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
+                                                 sizeof(USBPCAP_DEVICE_DATA),
+                                                 DKPORT_MTAG);
+    if (pDevExt->pDeviceData != NULL)
+    {
+        pDevExt->pDeviceData->deviceAddress = 0;
+        pDevExt->pDeviceData->numberOfEndpoints = 0;
+        pDevExt->pDeviceData->endpoints = NULL;
+    }
+    else
+    {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
     // 1. Create filter object for target device object
     ntStat = IoCreateDevice(pDevExt->pDrvObj, 0, NULL,
         pTgtDevObj->DeviceType, 0,
@@ -157,6 +171,13 @@ VOID DkDetachAndDeleteTgt(PDEVICE_EXTENSION pDevExt)
     {
         IoDeleteDevice(pDevExt->pTgtDevObj);
         pDevExt->pTgtDevObj = NULL;
+    }
+    if (pDevExt->pDeviceData)
+    {
+        USBPcapRemoveDeviceEndpoints(pDevExt->pData,
+                                     pDevExt->pDeviceData);
+        ExFreePool((PVOID)pDevExt->pDeviceData);
+        pDevExt->pDeviceData = NULL;
     }
 }
 

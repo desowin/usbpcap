@@ -26,9 +26,29 @@ typedef struct _USBPCAP_INTERNAL_ENDPOINT_INFO
     USBPCAP_ENDPOINT_INFO  info;
 } USBPCAP_INTERNAL_ENDPOINT_INFO, *PUSBPCAP_INTERNAL_ENDPOINT_INFO;
 
+VOID USBPcapRemoveEndpointInfo(IN PRTL_GENERIC_TABLE table,
+                               IN USBD_PIPE_HANDLE handle)
+{
+    USBPCAP_INTERNAL_ENDPOINT_INFO  info;
+    BOOLEAN                         deleted;
+
+    info.info.handle = handle;
+
+    deleted = RtlDeleteElementGenericTable(table, &info);
+
+    if (deleted == TRUE)
+    {
+        DkDbgVal("Successfully removed", handle);
+    }
+    else
+    {
+        DkDbgVal("Failed to remove", handle);
+    }
+}
+
 VOID USBPcapAddEndpointInfo(IN PRTL_GENERIC_TABLE table,
                             IN PUSBD_PIPE_INFORMATION pipeInfo,
-                            IN UCHAR deviceAddress)
+                            IN USHORT deviceAddress)
 {
     USBPCAP_INTERNAL_ENDPOINT_INFO  info;
     BOOLEAN                         new;
@@ -157,3 +177,60 @@ PRTL_GENERIC_TABLE USBPcapInitializeEndpointTable(IN PVOID context)
 
     return table;
 }
+
+BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_ROOTHUB_DATA pRootHub,
+                                    IN USBD_PIPE_HANDLE handle,
+                                    PUSBPCAP_ENDPOINT_INFO pInfo)
+{
+    KIRQL irql;
+    PUSBPCAP_ENDPOINT_INFO info;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&pRootHub->endpointTableSpinLock, &irql);
+    info = USBPcapGetEndpointInfo(pRootHub->endpointTable, handle);
+    if (info != NULL)
+    {
+        found = TRUE;
+        memcpy(pInfo, info, sizeof(USBPCAP_ENDPOINT_INFO));
+    }
+    KeReleaseSpinLock(&pRootHub->endpointTableSpinLock, irql);
+
+    if (found == TRUE)
+    {
+        DkDbgVal("Found endpoint info", handle);
+        DkDbgVal("", pInfo->type);
+        DkDbgVal("", pInfo->endpointAddress);
+        DkDbgVal("", pInfo->deviceAddress);
+    }
+    else
+    {
+        DkDbgVal("Unable to find endpoint info", handle);
+    }
+
+    return found;
+}
+
+VOID USBPcapRemoveDeviceEndpoints(PUSBPCAP_ROOTHUB_DATA pRootHub,
+                                  PUSBPCAP_DEVICE_DATA  pDevice)
+{
+    if (pDevice->endpoints != NULL)
+    {
+        USHORT i;
+        KIRQL  irql;
+
+        KeAcquireSpinLock(&pRootHub->endpointTableSpinLock,
+                          &irql);
+        for (i = 0; i < pDevice->numberOfEndpoints; ++i)
+        {
+            USBPcapRemoveEndpointInfo(pRootHub->endpointTable,
+                                      pDevice->endpoints[i]);
+        }
+        KeReleaseSpinLock(&pRootHub->endpointTableSpinLock,
+                          irql);
+
+        ExFreePool((PVOID)pDevice->endpoints);
+        pDevice->endpoints = NULL;
+        pDevice->numberOfEndpoints = 0;
+    }
+}
+

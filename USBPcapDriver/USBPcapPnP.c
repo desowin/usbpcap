@@ -233,6 +233,7 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
                 if (NT_SUCCESS(status))
                 {
                     DkDbgVal("Started device", address);
+                    pDevExt->pDeviceData->deviceAddress = address;
                 }
                 else
                 {

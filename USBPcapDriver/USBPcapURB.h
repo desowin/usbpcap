@@ -19,6 +19,8 @@
 
 #include "USBPcapMain.h"
 
-VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post, PROOTHUB_DATA pRootHub);
+VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
+                       PUSBPCAP_DEVICE_DATA pDeviceData,
+                       PUSBPCAP_ROOTHUB_DATA pRootHub);
 
 #endif /* USBPCAP_URB_H */

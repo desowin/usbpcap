@@ -25,17 +25,27 @@ typedef struct _USBPCAP_ENDPOINT_INFO
     USBD_PIPE_HANDLE  handle;
     USBD_PIPE_TYPE    type;
     UCHAR             endpointAddress;
-    UCHAR             deviceAddress;
+    USHORT            deviceAddress;
 } USBPCAP_ENDPOINT_INFO, *PUSBPCAP_ENDPOINT_INFO;
 
+VOID USBPcapRemoveEndpointInfo(IN PRTL_GENERIC_TABLE table,
+                               IN USBD_PIPE_HANDLE handle);
 VOID USBPcapAddEndpointInfo(IN PRTL_GENERIC_TABLE table,
                             IN PUSBD_PIPE_INFORMATION pipeInfo,
-                            IN UCHAR deviceAddress);
+                            IN USHORT deviceAddress);
 
 PUSBPCAP_ENDPOINT_INFO USBPcapGetEndpointInfo(IN PRTL_GENERIC_TABLE table,
                                               IN USBD_PIPE_HANDLE handle);
 
 VOID USBPcapFreeEndpointTable(IN PRTL_GENERIC_TABLE table);
 PRTL_GENERIC_TABLE USBPcapInitializeEndpointTable(IN PVOID context);
+
+
+BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_ROOTHUB_DATA pRootHub,
+                                    IN USBD_PIPE_HANDLE handle,
+                                    PUSBPCAP_ENDPOINT_INFO pInfo);
+
+VOID USBPcapRemoveDeviceEndpoints(PUSBPCAP_ROOTHUB_DATA pRootHub,
+                                  PUSBPCAP_DEVICE_DATA  pDevice);
 
 #endif /* USBPCAP_TABLES_H */
