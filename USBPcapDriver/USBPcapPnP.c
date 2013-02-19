@@ -6,31 +6,33 @@
 //
 extern UNICODE_STRING g_usDevName;
 extern UNICODE_STRING g_usLnkName;
+
 extern PDEVICE_OBJECT g_pThisDevObj;
 
 NTSTATUS DkAddDevice(PDRIVER_OBJECT pDrvObj, PDEVICE_OBJECT pPhysDevObj)
 {
     NTSTATUS            ntStat = STATUS_SUCCESS;
     PDEVICE_EXTENSION   pDevExt = NULL;
+    PDEVICE_OBJECT      pDeviceObject = NULL;
 
     ntStat = IoCreateDevice(pDrvObj, sizeof(DEVICE_EXTENSION), &g_usDevName,
-        FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &g_pThisDevObj);
+        FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &pDeviceObject);
+
+    g_pThisDevObj = pDeviceObject;
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error create device!", ntStat);
         return ntStat;
     }
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
-    pDevExt->pThisDevObj = g_pThisDevObj;
+    pDevExt = (PDEVICE_EXTENSION) pDeviceObject->DeviceExtension;
+    pDevExt->deviceMagic = USBPCAP_MAGIC_SYSTEM;
+    pDevExt->pThisDevObj = pDeviceObject;
     pDevExt->pDrvObj = pDrvObj;
 
-    pDevExt->pHubFlt = NULL;
-    pDevExt->pTgtDevObj = NULL;
-    pDevExt->ulTgtIndex = 0;
+    pDevExt->pDeviceData = NULL;
 
-
-    IoInitializeRemoveLock(&pDevExt->ioRemLock, 0, 0, 0);
+    IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
 
     KeInitializeSpinLock(&pDevExt->csqSpinLock);
     InitializeListHead(&pDevExt->lePendIrp);
@@ -53,7 +55,7 @@ NTSTATUS DkAddDevice(PDRIVER_OBJECT pDrvObj, PDEVICE_OBJECT pPhysDevObj)
     }
 
     pDevExt->pNextDevObj = NULL;
-    pDevExt->pNextDevObj = IoAttachDeviceToDeviceStack(g_pThisDevObj, pPhysDevObj);
+    pDevExt->pNextDevObj = IoAttachDeviceToDeviceStack(pDeviceObject, pPhysDevObj);
     if (pDevExt->pNextDevObj == NULL)
     {
         DkDbgStr("Error attach device!");
@@ -61,8 +63,8 @@ NTSTATUS DkAddDevice(PDRIVER_OBJECT pDrvObj, PDEVICE_OBJECT pPhysDevObj)
         goto EndAddDev;
     }
 
-    g_pThisDevObj->Flags |= (DO_BUFFERED_IO | DO_POWER_PAGABLE);
-    g_pThisDevObj->Flags &= ~DO_DEVICE_INITIALIZING;
+    pDeviceObject->Flags |= (DO_BUFFERED_IO | DO_POWER_PAGABLE);
+    pDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
 
 
 EndAddDev:
@@ -73,10 +75,10 @@ EndAddDev:
             IoDetachDevice(pDevExt->pNextDevObj);
         }
 
-        if (g_pThisDevObj)
+        if (pDeviceObject)
         {
             IoDeleteSymbolicLink(&g_usLnkName);
-            IoDeleteDevice(g_pThisDevObj);
+            IoDeleteDevice(pDeviceObject);
         }
     }
 
@@ -89,8 +91,24 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PDEVICE_EXTENSION    pDevExt = NULL;
     PIO_STACK_LOCATION   pStack = NULL;
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
+
+    pStack = IoGetCurrentIrpStackLocation(pIrp);
+
+    if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB)
+    {
+        return DkHubFltPnP(pDevExt, pStack, pIrp);
+    }
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
+    {
+        return DkTgtPnP(pDevExt, pStack, pIrp);
+    }
+    else
+    {
+        // Do nothing
+    }
+
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error acquire lock!", ntStat);
@@ -98,24 +116,6 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         return ntStat;
     }
 
-    pStack = IoGetCurrentIrpStackLocation(pIrp);
-
-    if (pDevObj == pDevExt->pHubFlt)
-    {
-        return DkHubFltPnP(pDevExt, pStack, pIrp);
-    }
-    else if (pDevObj == pDevExt->pTgtDevObj)
-    {
-        ntStat = DkTgtPnP(pDevExt, pStack, pIrp);
-
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-        return ntStat;
-    }
-    else
-    {
-        // Do nothing
-    }
 
 
     switch (pStack->MinorFunction)
@@ -125,7 +125,7 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
             ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
 
-            IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
@@ -139,13 +139,20 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             IoSkipCurrentIrpStackLocation(pIrp);
             ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-            IoReleaseRemoveLockAndWait(&pDevExt->ioRemLock, (PVOID) pIrp);
+            if (pDevExt->pRootHubObject != NULL)
+            {
+                PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->pRootHubObject->DeviceExtension;
 
-            DkDetachAndDeleteHubFilt(pDevExt);
+                IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
+                IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
+                DkDetachAndDeleteHubFilt(rootExt);
+            }
+            IoReleaseRemoveLockAndWait(&pDevExt->removeLock, (PVOID) pIrp);
 
             IoDeleteSymbolicLink(&g_usLnkName);
             IoDetachDevice(pDevExt->pNextDevObj);
-            IoDeleteDevice(g_pThisDevObj);
+            IoDeleteDevice(pDevObj);
+            g_pThisDevObj = NULL;
 
             return ntStat;
 
@@ -159,7 +166,7 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     IoSkipCurrentIrpStackLocation(pIrp);
     ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }
@@ -169,13 +176,21 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
 {
     NTSTATUS  ntStat = STATUS_SUCCESS;
 
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
+    if (!NT_SUCCESS(ntStat))
+    {
+        DkDbgVal("Error lock!", ntStat);
+        DkCompleteRequest(pIrp, ntStat, 0);
+        return ntStat;
+    }
+
     switch (pStack->MinorFunction)
     {
         case IRP_MN_START_DEVICE:
             DkDbgStr("IRP_MN_START_DEVICE");
 
-            ntStat = DkForwardAndWait(pDevExt->pNextHubFlt, pIrp);
-            IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+            ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
             return ntStat;
@@ -183,8 +198,10 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
 
         case IRP_MN_QUERY_DEVICE_RELATIONS:
             DkDbgStr("IRP_MN_QUERY_DEVICE_RELATIONS");
-            return DkHubFltPnpHandleQryDevRels(pDevExt, pStack, pIrp);
+            ntStat = DkHubFltPnpHandleQryDevRels(pDevExt, pStack, pIrp);
 
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
+            return ntStat;
 
         default:
             DkDbgVal("", pStack->MinorFunction);
@@ -193,9 +210,9 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
     }
 
     IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextHubFlt, pIrp);
+    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }
@@ -204,7 +221,7 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
 {
     NTSTATUS   ntStat = STATUS_SUCCESS;
 
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error lock!", ntStat);
@@ -218,16 +235,16 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
             /* IRP_MN_START_DEVICE is sent at PASSIVE_LEVEL */
             DkDbgStr("IRP_MN_START_DEVICE");
 
-            ntStat = DkForwardAndWait(pDevExt->pNextTgtDevObj, pIrp);
-            IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+            ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
             {
                 USHORT address;
                 NTSTATUS status;
 
-                status = USBPcapGetDeviceUSBAddress(pDevExt->pNextHubFlt,
-                                                    pDevExt->pNextTgtDevObj,
+                status = USBPcapGetDeviceUSBAddress(pDevExt->pDeviceData->pNextParentFlt,
+                                                    pDevExt->pNextDevObj,
                                                     &address);
 
                 if (NT_SUCCESS(status))
@@ -247,9 +264,9 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
             DkDbgStr("IRP_MN_REMOVE_DEVICE");
 
             IoSkipCurrentIrpStackLocation(pIrp);
-            ntStat = IoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
+            ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-            IoReleaseRemoveLockAndWait(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+            IoReleaseRemoveLockAndWait(&pDevExt->removeLock, (PVOID) pIrp);
 
             DkDetachAndDeleteTgt(pDevExt);
 
@@ -263,9 +280,9 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
     }
 
     IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
+    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }
@@ -275,13 +292,21 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
     NTSTATUS             ntStat = STATUS_SUCCESS;
     PDEVICE_RELATIONS    pDevRel = NULL;
 
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
+    if (!NT_SUCCESS(ntStat))
+    {
+        DkDbgVal("Error lock!", ntStat);
+        DkCompleteRequest(pIrp, ntStat, 0);
+        return ntStat;
+    }
+
     /* PnP manager sends this at PASSIVE_LEVEL */
     switch (pStack->Parameters.QueryDeviceRelations.Type)
     {
         case BusRelations:
             DkDbgStr("PnP, IRP_MN_QUERY_DEVICE_RELATIONS: BusRelations");
 
-            ntStat = DkForwardAndWait(pDevExt->pNextHubFlt, pIrp);
+            ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
 
             // After we forward the request, the bus driver have created or deleted
             // a child device object. When bus driver created one (or more), this is the PDO
@@ -292,17 +317,17 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                 pDevRel = (PDEVICE_RELATIONS) pIrp->IoStatus.Information;
                 if (pDevRel)
                 {
-                    USBPcapPrintUSBPChildrenInformation(pDevExt->pNextHubFlt);
+                    USBPcapPrintUSBPChildrenInformation(pDevExt->pNextDevObj);
 
                     DkDbgVal("Child(s) number", pDevRel->Count);
                     if ((pDevRel->Count > 0) &&
-                        (pDevRel->Count > pDevExt->ulTgtIndex))
+                        (pDevRel->Count > pDevExt->pDeviceData->ulTgtIndex))
                     {
-                        if (pDevExt->pTgtDevObj == NULL)
+                        //if (pDevExt->pTgtDevObj == NULL)
                         {
                             DkDbgStr("Create and attach target device");
 
-                            pDevExt->ulTgtIndex = pDevRel->Count - 1;
+                            pDevExt->pDeviceData->ulTgtIndex = pDevRel->Count - 1;
 
                             DkCreateAndAttachTgt(pDevExt, pDevRel->Objects[pDevRel->Count - 1]);
                         }
@@ -314,7 +339,7 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                 }
             }
 
-            IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
@@ -346,9 +371,9 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
     }
 
     IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextHubFlt, pIrp);
+    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }

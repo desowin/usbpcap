@@ -1,7 +1,5 @@
 #include "USBPcapMain.h"
 
-extern PDEVICE_OBJECT    g_pThisDevObj;
-
 NTSTATUS DkPower(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 {
     NTSTATUS             ntStat = STATUS_SUCCESS;
@@ -10,8 +8,8 @@ NTSTATUS DkPower(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PDEVICE_OBJECT       pNextDevObj = NULL;
     PCHAR                pTmp = NULL;
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error acquire lock!", ntStat);
@@ -21,23 +19,19 @@ NTSTATUS DkPower(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
-    if (pDevObj == pDevExt->pHubFlt)
+    pNextDevObj = pDevExt->pNextDevObj;
+
+    if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB)
     {
-        pNextDevObj = pDevExt->pNextHubFlt;
-        pTmp = "Hub Filter";
+        pTmp = "Root Hub Filter";
     }
-    else if (pDevObj == pDevExt->pTgtDevObj)
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
     {
-        ntStat = DkTgtPower(pDevExt, pStack, pIrp);
-
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-        return ntStat;
+        pTmp = "Device";
     }
     else
     {
-        pNextDevObj = pDevExt->pNextDevObj;
-        pTmp = "This";
+        pTmp = "Global";
     }
 
     switch (pStack->MinorFunction)
@@ -75,60 +69,7 @@ NTSTATUS DkPower(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     ntStat = IoCallDriver(pNextDevObj, pIrp);
 #endif
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-    return ntStat;
-}
-
-
-NTSTATUS DkTgtPower(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp)
-{
-    NTSTATUS  ntStat = STATUS_SUCCESS;
-
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error lock!", ntStat);
-        DkCompleteRequest(pIrp, ntStat, 0);
-        return ntStat;
-    }
-
-    switch (pStack->MinorFunction)
-    {
-        case IRP_MN_POWER_SEQUENCE:
-            DkDbgStr("IRP_MN_POWER_SEQUENCE");
-            break;
-
-        case IRP_MN_QUERY_POWER:
-            DkDbgStr("IRP_MN_QUERY_POWER");
-            break;
-
-        case IRP_MN_SET_POWER:
-            DkDbgStr("IRP_MN_SET_POWER");
-            break;
-
-        case IRP_MN_WAIT_WAKE:
-            DkDbgStr("IRP_MN_WAIT_WAKE");
-            break;
-
-        default:
-            DkDbgVal("Unknown Minor Power IRP", pStack->MinorFunction);
-            break;
-    }
-
-#if (NTDDI_VERSION < NTDDI_VISTA)
-    PoStartNextPowerIrp(pIrp);
-#endif
-
-    IoSkipCurrentIrpStackLocation(pIrp);
-
-#if (NTDDI_VERSION < NTDDI_VISTA)
-    ntStat = PoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
-#else
-    ntStat = IoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
-#endif
-
-    IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }

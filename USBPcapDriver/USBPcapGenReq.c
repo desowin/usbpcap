@@ -1,7 +1,5 @@
 #include "USBPcapMain.h"
 
-extern PDEVICE_OBJECT    g_pThisDevObj;
-
 ////////////////////////////////////////////////////////////////////////////
 // Create, close and clean up handlers
 //
@@ -12,9 +10,9 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PIO_STACK_LOCATION    pStack = NULL;
     PDEVICE_OBJECT        pNextDevObj = NULL;
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error acquire lock!", ntStat);
@@ -24,20 +22,13 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
-    if (pDevObj == pDevExt->pHubFlt)
+    if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB ||
+        pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
     {
-        // Handling Create, Close and Cleanup request for Hub Filter
+        // Handling Create, Close and Cleanup request for Hub Filter and
+        // target devices
         IoSkipCurrentIrpStackLocation(pIrp);
-        ntStat = IoCallDriver(pDevExt->pNextHubFlt, pIrp);
-    }
-    else if (pDevObj == pDevExt->pTgtDevObj)
-    {
-        // Handling Create, Close and Cleanup request for target device
-        ntStat = DkTgtDefault(pDevExt, pStack, pIrp);
-
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-        return ntStat;
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
     }
     else
     {
@@ -50,7 +41,7 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
             case IRP_MJ_CLEANUP:
                 DkQueCleanUpData();
-                DkCsqCleanUpQueue(g_pThisDevObj, pIrp);
+                DkCsqCleanUpQueue(pDevObj, pIrp);
                 break;
 
 
@@ -66,7 +57,7 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         DkCompleteRequest(pIrp, ntStat, 0);
     }
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }
@@ -89,7 +80,7 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PDKPORT_DAT         pDat = NULL;
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat)){
         DkDbgVal("Error acquire lock!", ntStat);
         DkCompleteRequest(pIrp, ntStat, 0);
@@ -98,20 +89,13 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
-    if (pDevObj == pDevExt->pHubFlt)
+    if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB ||
+        pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
     {
-        // Handling Read/Write request for Hub Filter object
+        // Handling Read/Write request for Hub Filter object and
+        // target devices
         IoSkipCurrentIrpStackLocation(pIrp);
         ntStat = IoCallDriver(pNextDevObj, pIrp);
-    }
-    else if (pDevObj == pDevExt->pTgtDevObj)
-    {
-        // Handling Read/Write for target object
-        ntStat = DkTgtDefault(pDevExt, pStack, pIrp);
-
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-        return ntStat;
     }
     else
     {
@@ -134,7 +118,7 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                     if (pQueDat == NULL)
                     {
                         IoCsqInsertIrp(&pDevExt->ioCsq, pIrp, NULL);
-                        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+                        IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
                         return STATUS_PENDING;
                     }
                     else
@@ -145,7 +129,7 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
                         DkQueDel(pQueDat);
 
-                        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+                        IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
                         DkCompleteRequest(pIrp, ntStat, (ULONG_PTR) sizeof(DKPORT_DAT));
 
@@ -170,7 +154,7 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         DkCompleteRequest(pIrp, ntStat, 0);
     }
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }

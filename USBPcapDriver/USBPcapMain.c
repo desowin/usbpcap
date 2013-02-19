@@ -7,7 +7,6 @@ UNICODE_STRING        g_usDevName;
 UNICODE_STRING        g_usLnkName;
 PDEVICE_OBJECT        g_pThisDevObj;
 
-
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
 {
     UCHAR  ucCnt = 0;
@@ -40,8 +39,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
     RtlInitUnicodeString(&g_usDevName, DKPORT_DEVNAME_STR);
     RtlInitUnicodeString(&g_usLnkName, DKPORT_DEVLINK_STR);
 
-    g_pThisDevObj = NULL;
-
     return STATUS_SUCCESS;
 }
 
@@ -64,9 +61,9 @@ NTSTATUS DkDefault(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PIO_STACK_LOCATION  pStack = NULL;
     PDEVICE_OBJECT      pNextDevObj = NULL;
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error acquire lock!", ntStat);
@@ -76,53 +73,13 @@ NTSTATUS DkDefault(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
-    if (pDevObj == pDevExt->pHubFlt)
-    {
-        DkDbgVal("Hub Filter", pStack->MajorFunction);
-        pNextDevObj = pDevExt->pNextHubFlt;
-    }
-    else if (pDevObj == pDevExt->pTgtDevObj)
-    {
-        ntStat = DkTgtDefault(pDevExt, pStack, pIrp);
-
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-        return ntStat;
-    }
-    else
-    {
-        DkDbgVal("This", pStack->MajorFunction);
-        pNextDevObj = pDevExt->pNextDevObj;
-    }
+    DkDbgVal("DkDefault", pStack->MajorFunction);
+    pNextDevObj = pDevExt->pNextDevObj;
 
     IoSkipCurrentIrpStackLocation(pIrp);
     ntStat = IoCallDriver(pNextDevObj, pIrp);
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-    return ntStat;
-}
-
-NTSTATUS DkTgtDefault(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp)
-{
-    NTSTATUS                    ntStat = STATUS_SUCCESS;
-
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error acquire lock!", ntStat);
-        DkCompleteRequest(pIrp, ntStat, 0);
-        return ntStat;
-    }
-
-    pStack = IoGetCurrentIrpStackLocation(pIrp);
-
-    DkDbgVal("Target", pStack->MajorFunction);
-
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
-
-    IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }

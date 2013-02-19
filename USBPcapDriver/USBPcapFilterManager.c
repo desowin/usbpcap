@@ -5,27 +5,15 @@
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
 //
-NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp)
+NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pParentDevExt, PIRP pIrp)
 {
     NTSTATUS          ntStat = STATUS_SUCCESS;
     UNICODE_STRING    usTgtName;
     PFILE_OBJECT      pFlObj = NULL;
+    PDEVICE_OBJECT    pHubFilter = NULL;
     PDEVICE_OBJECT    pTgtDevObj = NULL;
+    PDEVICE_EXTENSION pDevExt = NULL;
 
-
-    /* Allocate USBPCAP_ROOTHUB_DATA */
-    pDevExt->pData = ExAllocatePoolWithTag(NonPagedPool,
-                                           sizeof(USBPCAP_ROOTHUB_DATA),
-                                           DKPORT_MTAG);
-    if (pDevExt->pData != NULL)
-    {
-        KeInitializeSpinLock(&pDevExt->pData->endpointTableSpinLock);
-        pDevExt->pData->endpointTable = USBPcapInitializeEndpointTable(NULL);
-    }
-    else
-    {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
 
     // 1. Get device object pointer to attach to
     RtlInitUnicodeString(&usTgtName, (PWSTR) pIrp->AssociatedIrp.SystemBuffer);
@@ -37,8 +25,9 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp)
     }
 
     // 2. Create filter object
-    ntStat = IoCreateDevice(pDevExt->pDrvObj, 0, NULL,
-        pTgtDevObj->DeviceType, 0, FALSE, &pDevExt->pHubFlt);
+    ntStat = IoCreateDevice(pParentDevExt->pDrvObj,
+                            sizeof(DEVICE_EXTENSION), NULL,
+                            pTgtDevObj->DeviceType, 0, FALSE, &pHubFilter);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error create Hub Filter!", ntStat);
@@ -47,30 +36,97 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp)
     }
     ObDereferenceObject(pFlObj);
 
+    pDevExt = (PDEVICE_EXTENSION) pHubFilter->DeviceExtension;
+    pDevExt->deviceMagic = USBPCAP_MAGIC_ROOTHUB;
+    IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
+    pDevExt->pThisDevObj = pHubFilter;
+    pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
+
+    pDevExt->pDrvObj = pParentDevExt->pDrvObj;
+    pDevExt->pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
+                                                 sizeof(USBPCAP_DEVICE_DATA),
+                                                 DKPORT_MTAG);
+
+    if (pDevExt->pDeviceData != NULL)
+    {
+        pDevExt->pDeviceData->deviceAddress = 255; /* Unknown */
+        pDevExt->pDeviceData->numberOfEndpoints = 0;
+        pDevExt->pDeviceData->endpoints = NULL;
+
+        pDevExt->pDeviceData->ulTgtIndex = 0;
+
+        /* Allocate USBPCAP_ROOTHUB_DATA */
+        pDevExt->pDeviceData->pData =
+            ExAllocatePoolWithTag(NonPagedPool,
+                                  sizeof(USBPCAP_ROOTHUB_DATA),
+                                  DKPORT_MTAG);
+        if (pDevExt->pDeviceData->pData != NULL)
+        {
+            KeInitializeSpinLock(&pDevExt->pDeviceData->pData->endpointTableSpinLock);
+            pDevExt->pDeviceData->pData->endpointTable = USBPcapInitializeEndpointTable(NULL);
+        }
+        else
+        {
+            ntStat = STATUS_INSUFFICIENT_RESOURCES;
+            goto EndFunc;
+        }
+    }
+    else
+    {
+        ntStat = STATUS_INSUFFICIENT_RESOURCES;
+        goto EndFunc;
+    }
+
     // 3. Attach to bus driver
-    pDevExt->pNextHubFlt = NULL;
-    pDevExt->pNextHubFlt = IoAttachDeviceToDeviceStack(pDevExt->pHubFlt, pTgtDevObj);
-    if (pDevExt->pNextHubFlt == NULL)
+    pDevExt->pNextDevObj = NULL;
+    pDevExt->pNextDevObj = IoAttachDeviceToDeviceStack(pHubFilter, pTgtDevObj);
+    if (pDevExt->pNextDevObj == NULL)
     {
         ntStat = STATUS_NO_SUCH_DEVICE;
         DkDbgStr("Error attach device!");
         goto EndFunc;
     }
 
-    pDevExt->pHubFlt->Flags |=
-        (pDevExt->pNextHubFlt->Flags & (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE));
+    /* Set up parent and target object in USBPCAP_DEVICE_DATA */
+    pDevExt->pDeviceData->pParentFlt = pParentDevExt->pThisDevObj;
+    pDevExt->pDeviceData->pNextParentFlt = pParentDevExt->pNextDevObj;
+    pDevExt->pDeviceData->pTargetObj = pDevExt->pThisDevObj;
+    pDevExt->pDeviceData->pNextTargetObj = pDevExt->pNextDevObj;
 
-    pDevExt->pHubFlt->Flags &= ~DO_DEVICE_INITIALIZING;
+    pHubFilter->Flags |=
+        (pDevExt->pNextDevObj->Flags & (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE));
+
+    pHubFilter->Flags &= ~DO_DEVICE_INITIALIZING;
+
+    pParentDevExt->pRootHubObject = pHubFilter;
+
+    IoAcquireRemoveLock(pDevExt->parentRemoveLock, NULL);
 
 EndFunc:
 
     // If something bad happened
     if (!NT_SUCCESS(ntStat))
     {
-        if (pDevExt->pHubFlt)
+        if (pDevExt != NULL && pDevExt->pDeviceData != NULL)
         {
-            IoDeleteDevice(pDevExt->pHubFlt);
-            pDevExt->pHubFlt = NULL;
+            if (pDevExt->pDeviceData->pData != NULL)
+            {
+                if (pDevExt->pDeviceData->pData->endpointTable != NULL)
+                {
+                    USBPcapFreeEndpointTable(pDevExt->pDeviceData->pData->endpointTable);
+                }
+                ExFreePool((PVOID)pDevExt->pDeviceData->pData);
+                pDevExt->pDeviceData->pData = NULL;
+            }
+
+            ExFreePool((PVOID)pDevExt->pDeviceData);
+            pDevExt->pDeviceData = NULL;
+        }
+
+        if (pHubFilter)
+        {
+            IoDeleteDevice(pHubFilter);
+            pHubFilter = NULL;
         }
     }
 
@@ -79,21 +135,38 @@ EndFunc:
 
 VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt)
 {
-    if (pDevExt->pNextHubFlt)
+    NTSTATUS status;
+    if (pDevExt->parentRemoveLock)
     {
-        IoDetachDevice(pDevExt->pNextHubFlt);
-        pDevExt->pNextHubFlt = NULL;
+        IoReleaseRemoveLock(pDevExt->parentRemoveLock, NULL);
     }
-    if (pDevExt->pHubFlt)
+
+    if (pDevExt->pNextDevObj)
     {
-        IoDeleteDevice(pDevExt->pHubFlt);
-        pDevExt->pHubFlt = NULL;
+        IoDetachDevice(pDevExt->pNextDevObj);
+        pDevExt->pNextDevObj = NULL;
     }
-    if (pDevExt->pData)
+    if (pDevExt->pThisDevObj)
     {
-        USBPcapFreeEndpointTable(pDevExt->pData->endpointTable);
-        ExFreePool(pDevExt->pData);
-        pDevExt->pData = NULL;
+        IoDeleteDevice(pDevExt->pThisDevObj);
+        pDevExt->pThisDevObj = NULL;
+    }
+    if (pDevExt->pDeviceData)
+    {
+        if (pDevExt->pDeviceData->pData)
+        {
+            USBPcapFreeEndpointTable(pDevExt->pDeviceData->pData->endpointTable);
+            ExFreePool(pDevExt->pDeviceData->pData);
+            pDevExt->pDeviceData->pData = NULL;
+        }
+
+        if (pDevExt->pDeviceData->endpoints != NULL)
+        {
+            ExFreePool((PVOID)pDevExt->pDeviceData->endpoints);
+            pDevExt->pDeviceData->endpoints = NULL;
+        }
+        ExFreePool(pDevExt->pDeviceData);
+        pDevExt->pDeviceData = NULL;
     }
 }
 
@@ -102,9 +175,27 @@ VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt)
 ////////////////////////////////////////////////////////////////////////////
 // Functions to attach and detach target device object
 //
-NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pDevExt, PDEVICE_OBJECT pTgtDevObj)
+NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pTgtDevObj)
 {
-    NTSTATUS  ntStat = STATUS_SUCCESS;
+    NTSTATUS           ntStat = STATUS_SUCCESS;
+    PDEVICE_OBJECT     pDeviceObject = NULL;
+    PDEVICE_EXTENSION  pDevExt = NULL;
+
+    // 1. Create filter object for target device object
+    ntStat = IoCreateDevice(pParentDevExt->pDrvObj,
+                            sizeof(DEVICE_EXTENSION), NULL,
+                            pTgtDevObj->DeviceType, 0,
+                            FALSE, &pDeviceObject);
+    if (!NT_SUCCESS(ntStat))
+    {
+        DkDbgVal("Error create target device!", ntStat);
+        return ntStat;
+    }
+
+    pDevExt = (PDEVICE_EXTENSION) pDeviceObject->DeviceExtension;
+    pDevExt->deviceMagic = USBPCAP_MAGIC_DEVICE;
+    pDevExt->pThisDevObj = pDeviceObject;
+    pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
 
     /* Allocate USBPCAP_DEVICE_DATA */
     pDevExt->pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
@@ -115,45 +206,55 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pDevExt, PDEVICE_OBJECT pTgtDevO
         pDevExt->pDeviceData->deviceAddress = 0;
         pDevExt->pDeviceData->numberOfEndpoints = 0;
         pDevExt->pDeviceData->endpoints = NULL;
+
+        pDevExt->pDeviceData->ulTgtIndex = 0;
+
+        pDevExt->pDeviceData->pData = pParentDevExt->pDeviceData->pData;
     }
     else
     {
-        return STATUS_INSUFFICIENT_RESOURCES;
-    }
-    // 1. Create filter object for target device object
-    ntStat = IoCreateDevice(pDevExt->pDrvObj, 0, NULL,
-        pTgtDevObj->DeviceType, 0,
-        FALSE, &pDevExt->pTgtDevObj);
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error create target device!", ntStat);
-        return ntStat;
+        ntStat = STATUS_INSUFFICIENT_RESOURCES;
+        goto EndAttDev;
     }
 
     // 2. Initilize remove lock for filter object of target device
-    IoInitializeRemoveLock(&pDevExt->ioRemLockTgt, 0, 0, 0);
+    IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
 
     // 3. Attach to target device
-    pDevExt->pNextTgtDevObj = NULL;
-    pDevExt->pNextTgtDevObj = IoAttachDeviceToDeviceStack(pDevExt->pTgtDevObj, pTgtDevObj);
-    if (pDevExt->pNextTgtDevObj == NULL)
+    pDevExt->pNextDevObj = NULL;
+    pDevExt->pNextDevObj = IoAttachDeviceToDeviceStack(pDevExt->pThisDevObj, pTgtDevObj);
+    if (pDevExt->pNextDevObj == NULL)
     {
         DkDbgStr("Error attach target device!");
         ntStat = STATUS_NO_SUCH_DEVICE;
         goto EndAttDev;
     }
 
-    // 4. Set up some filter device object flags
-    pDevExt->pTgtDevObj->Flags |=
-        (pDevExt->pNextTgtDevObj->Flags & (DO_BUFFERED_IO | DO_POWER_PAGABLE | DO_DIRECT_IO));
-    pDevExt->pTgtDevObj->Flags &= ~DO_DEVICE_INITIALIZING;
+    /* Set up parent and target objects in USBPCAP_DEVICE_DATA */
+    pDevExt->pDeviceData->pParentFlt = pParentDevExt->pThisDevObj;
+    pDevExt->pDeviceData->pNextParentFlt = pParentDevExt->pNextDevObj;
+    pDevExt->pDeviceData->pTargetObj = pDevExt->pThisDevObj;
+    pDevExt->pDeviceData->pNextTargetObj = pDevExt->pNextDevObj;
 
+    // 4. Set up some filter device object flags
+    pDevExt->pThisDevObj->Flags |=
+        (pDevExt->pNextDevObj->Flags & (DO_BUFFERED_IO | DO_POWER_PAGABLE | DO_DIRECT_IO));
+    pDevExt->pThisDevObj->Flags &= ~DO_DEVICE_INITIALIZING;
+
+    IoAcquireRemoveLock(pDevExt->parentRemoveLock, NULL);
 
 EndAttDev:
-    if (!NT_SUCCESS(ntStat)){
-        if (pDevExt->pTgtDevObj){
-            IoDeleteDevice(pDevExt->pTgtDevObj);
-            pDevExt->pTgtDevObj = NULL;
+    if (!NT_SUCCESS(ntStat))
+    {
+        if (pDevExt != NULL && pDevExt->pDeviceData != NULL)
+        {
+            ExFreePool((PVOID)pDevExt->pDeviceData);
+            pDevExt->pDeviceData = NULL;
+        }
+        if (pDeviceObject)
+        {
+            IoDeleteDevice(pDeviceObject);
+            pDeviceObject = NULL;
         }
     }
 
@@ -162,19 +263,23 @@ EndAttDev:
 
 VOID DkDetachAndDeleteTgt(PDEVICE_EXTENSION pDevExt)
 {
-    if (pDevExt->pNextTgtDevObj)
+    if (pDevExt->parentRemoveLock)
     {
-        IoDetachDevice(pDevExt->pNextTgtDevObj);
-        pDevExt->pNextTgtDevObj = NULL;
+        IoReleaseRemoveLock(pDevExt->parentRemoveLock, NULL);
     }
-    if (pDevExt->pTgtDevObj)
+    if (pDevExt->pNextDevObj)
     {
-        IoDeleteDevice(pDevExt->pTgtDevObj);
-        pDevExt->pTgtDevObj = NULL;
+        IoDetachDevice(pDevExt->pNextDevObj);
+        pDevExt->pNextDevObj = NULL;
+    }
+    if (pDevExt->pThisDevObj)
+    {
+        IoDeleteDevice(pDevExt->pThisDevObj);
+        pDevExt->pThisDevObj = NULL;
     }
     if (pDevExt->pDeviceData)
     {
-        USBPcapRemoveDeviceEndpoints(pDevExt->pData,
+        USBPcapRemoveDeviceEndpoints(pDevExt->pDeviceData->pData,
                                      pDevExt->pDeviceData);
         ExFreePool((PVOID)pDevExt->pDeviceData);
         pDevExt->pDeviceData = NULL;

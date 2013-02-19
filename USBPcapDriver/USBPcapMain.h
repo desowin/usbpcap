@@ -33,31 +33,45 @@ typedef struct _USBPCAP_ROOTHUB_DATA
 
 typedef struct _DEVICE_DATA
 {
+    /* pParentFlt and pNextParentFlt are NULL for RootHub */
+    PDEVICE_OBJECT  pParentFlt;      /* Parent filter object */
+    PDEVICE_OBJECT  pNextParentFlt;  /* Lower object of Parent filter object */
+
+    /* Those are always valid */
+    PDEVICE_OBJECT  pTargetObj;     /* Target filter object */
+    PDEVICE_OBJECT  pNextTargetObj; /* Lower object of target object */
+
+    ULONG           ulTgtIndex;      // Index of target device used when receive IRP_MN_QUERY_DEVICE_RELATION
+
     USHORT                deviceAddress;
     USHORT                numberOfEndpoints;
     USBD_PIPE_HANDLE      *endpoints; /* Array of endpoint handles */
+
+    PUSBPCAP_ROOTHUB_DATA  pData;       /* Roothub data */
 } USBPCAP_DEVICE_DATA, *PUSBPCAP_DEVICE_DATA;
+
+#define USBPCAP_MAGIC_SYSTEM   0xBAD51571
+#define USBPCAP_MAGIC_ROOTHUB  0xBAD51572
+#define USBPCAP_MAGIC_DEVICE   0xBAD51573
 
 ////////////////////////////////////////////////////////////
 // Device extension structure for this object
 //
 typedef struct DEVICE_EXTENSION_Tag {
+    UINT32          deviceMagic;     /* determines device type */
     PDEVICE_OBJECT  pThisDevObj;     // This device object pointer
-    PDEVICE_OBJECT  pHubFlt;         // Hub filter object
-    PDEVICE_OBJECT  pTgtDevObj;      // Target filter object
     PDEVICE_OBJECT  pNextDevObj;     // Lower object of this object
-    PDEVICE_OBJECT  pNextHubFlt;     // Lower object of Hub filter object
-    PDEVICE_OBJECT  pNextTgtDevObj;  // Lower object of target object
     PDRIVER_OBJECT  pDrvObj;         // Driver object pointer
-    IO_REMOVE_LOCK  ioRemLock;       // Remove lock for this object
-    IO_REMOVE_LOCK  ioRemLockTgt;    // Remove lock for target object
+    IO_REMOVE_LOCK  removeLock;       // Remove lock for this object
+    PIO_REMOVE_LOCK parentRemoveLock; /* Pointer to parent remove lock */
+
+    PDEVICE_OBJECT  pRootHubObject;  /* Root Hub object */
+
     LIST_ENTRY      lePendIrp;       // Used by I/O Cancel-Safe
     IO_CSQ          ioCsq;           // I/O Cancel-Safe object
     KSPIN_LOCK      csqSpinLock;     // Spin lock object for I/O Cancel-Safe
-    ULONG           ulTgtIndex;      // Index of target device used when receive IRP_MN_QUERY_DEVICE_RELATION
 
-    PUSBPCAP_ROOTHUB_DATA  pData;       // Roothub data
-    PUSBPCAP_DEVICE_DATA   pDeviceData; // Device data
+    PUSBPCAP_DEVICE_DATA   pDeviceData; /* Device data */
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
 
@@ -133,8 +147,6 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
 ///////////////////////////////////////////////////////////////////////////
 // "Sub dispatch routines" for target device
 //
-NTSTATUS DkTgtPower(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp);
-NTSTATUS DkTgtDefault(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp);
 NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp);
 NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp);
 

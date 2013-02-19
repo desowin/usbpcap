@@ -2,8 +2,6 @@
 #include "include\USBPcap.h"
 #include "USBPcapURB.h"
 
-extern PDEVICE_OBJECT    g_pThisDevObj;
-
 ///////////////////////////////////////////////////////////////////////
 // I/O device control request handlers
 //
@@ -14,9 +12,9 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PIO_STACK_LOCATION  pStack = NULL;
     ULONG               ulRes = 0, ctlCode = 0;
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error lock!", ntStat);
@@ -28,31 +26,23 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     ctlCode = IoGetFunctionCodeFromCtlCode(pStack->Parameters.DeviceIoControl.IoControlCode);
 
-    if (pDevObj == pDevExt->pHubFlt)
+    if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB ||
+        pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
     {
-        DkDbgVal("Hub Filter: IOCTL_XXXXX", ctlCode);
-
         IoSkipCurrentIrpStackLocation(pIrp);
-        ntStat = IoCallDriver(pDevExt->pNextHubFlt, pIrp);
-    }
-    else if (pDevObj == pDevExt->pTgtDevObj)
-    {
-        ntStat = DkTgtDefault(pDevExt, pStack, pIrp);
-
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
-
-        return ntStat;
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
     }
     else
     {
         // Handle I/O device control request for attach and detach USB Hub
-        switch (pStack->Parameters.DeviceIoControl.IoControlCode){
+        switch (pStack->Parameters.DeviceIoControl.IoControlCode)
+        {
             case IOCTL_DKSYSPORT_START_MON:
                 if (pStack->Parameters.DeviceIoControl.InputBufferLength <= 0)
                 {
                     ntStat = STATUS_BUFFER_TOO_SMALL;
                 }
-                else if (pDevExt->pHubFlt)
+                else if (pDevExt->pRootHubObject)
                 {
                     ntStat = STATUS_ACCESS_DENIED;
                 }
@@ -64,15 +54,21 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
 
             case IOCTL_DKSYSPORT_STOP_MON:
-                // If we hold the filter target device or the filter target
-                // device is still active then we will reject this request
-                if (pDevExt->pTgtDevObj)
+                // If there is no root hub object rejest this request
+                // This IOCTL blocks until all targets are removed
+                if (pDevExt->pRootHubObject == NULL)
                 {
                     ntStat = STATUS_ACCESS_DENIED;
                 }
                 else
                 {
-                    DkDetachAndDeleteHubFilt(pDevExt);
+                    PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->pRootHubObject->DeviceExtension;
+
+                    IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
+                    IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
+
+                    DkDetachAndDeleteHubFilt(rootExt);
+                    pDevExt->pRootHubObject = NULL;
                 }
                 break;
 
@@ -103,7 +99,7 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         DkCompleteRequest(pIrp, ntStat, ulRes);
     }
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }
@@ -124,9 +120,9 @@ NTSTATUS DkInDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PDEVICE_OBJECT      pNextDevObj = NULL;
     ULONG               ctlCode = 0;
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error lock!", ntStat);
@@ -138,16 +134,16 @@ NTSTATUS DkInDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     ctlCode = IoGetFunctionCodeFromCtlCode(pStack->Parameters.DeviceIoControl.IoControlCode);
 
-    if (pDevObj == pDevExt->pHubFlt)
+    if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB)
     {
         DkDbgVal("Hub Filter: IOCTL_INTERNAL_XXXXX", ctlCode);
-        pNextDevObj = pDevExt->pNextHubFlt;
+        pNextDevObj = pDevExt->pNextDevObj;
     }
-    else if (pDevObj == pDevExt->pTgtDevObj)
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
     {
         ntStat = DkTgtInDevCtl(pDevExt, pStack, pIrp);
 
-        IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+        IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
         return ntStat;
     }
@@ -160,7 +156,7 @@ NTSTATUS DkInDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     IoSkipCurrentIrpStackLocation(pIrp);
     ntStat = IoCallDriver(pNextDevObj, pIrp);
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLock, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return ntStat;
 }
@@ -173,7 +169,7 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
     UNICODE_STRING      usUSBFuncName;
     ULONG               ctlCode = 0;
 
-    ntStat = IoAcquireRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+    ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error lock!", ntStat);
@@ -199,7 +195,8 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 1);
 
             USBPcapAnalyzeURB(pUrb, FALSE,
-                              pDevExt->pDeviceData, pDevExt->pData);
+                              pDevExt->pDeviceData,
+                              pDevExt->pDeviceData->pData);
         }
 
         // Forward this request to bus driver or next lower object
@@ -209,16 +206,16 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
             (PIO_COMPLETION_ROUTINE) DkTgtInDevCtlCompletion,
             NULL, TRUE, TRUE, TRUE);
 
-        ntStat = IoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
     }
     else
     {
         DkDbgVal("IOCTL_INTERNAL_USB_XXXX", ctlCode);
 
         IoSkipCurrentIrpStackLocation(pIrp);
-        ntStat = IoCallDriver(pDevExt->pNextTgtDevObj, pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-        IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+        IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     }
 
     return ntStat;
@@ -234,7 +231,7 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
     if (pIrp->PendingReturned)
         IoMarkIrpPending(pIrp);
 
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
+    pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
     // URB is collected AFTER forward to bus driver or next lower object
     if (NT_SUCCESS(pIrp->IoStatus.Status))
@@ -249,7 +246,8 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 0);
 
             USBPcapAnalyzeURB(pUrb, TRUE,
-                              pDevExt->pDeviceData, pDevExt->pData);
+                              pDevExt->pDeviceData,
+                              pDevExt->pDeviceData->pData);
         }
         else
         {
@@ -261,7 +259,7 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
         DkDbgVal("Bus driver returned an error!", pIrp->IoStatus.Status);
     }
 
-    IoReleaseRemoveLock(&pDevExt->ioRemLockTgt, (PVOID) pIrp);
+    IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
     return STATUS_SUCCESS;
 }
