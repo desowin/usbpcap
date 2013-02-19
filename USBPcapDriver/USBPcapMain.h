@@ -41,7 +41,8 @@ typedef struct _DEVICE_DATA
     PDEVICE_OBJECT  pTargetObj;     /* Target filter object */
     PDEVICE_OBJECT  pNextTargetObj; /* Lower object of target object */
 
-    ULONG           ulTgtIndex;      // Index of target device used when receive IRP_MN_QUERY_DEVICE_RELATION
+    /* Previous children. Used when receive IRP_MN_QUERY_DEVICE_RELATION. Always NULL-terminated, non-NULL */
+    PDEVICE_OBJECT  *previousChildren;
 
     USHORT                deviceAddress;
     USHORT                numberOfEndpoints;

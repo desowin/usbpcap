@@ -317,24 +317,80 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                 pDevRel = (PDEVICE_RELATIONS) pIrp->IoStatus.Information;
                 if (pDevRel)
                 {
+                    ULONG i;
                     USBPcapPrintUSBPChildrenInformation(pDevExt->pNextDevObj);
 
                     DkDbgVal("Child(s) number", pDevRel->Count);
-                    if ((pDevRel->Count > 0) &&
-                        (pDevRel->Count > pDevExt->pDeviceData->ulTgtIndex))
+
+                    /*
+                     * previousChildren should always be non-null
+                     * If it's NULL we will just possibly miss some devices.
+                     *
+                     * It's not critical though, so don't bugcheck.
+                     */
+                    if (pDevExt->pDeviceData->previousChildren != NULL)
                     {
-                        //if (pDevExt->pTgtDevObj == NULL)
+                        for (i = 0; i < pDevRel->Count; i++)
                         {
-                            DkDbgStr("Create and attach target device");
+                            PDEVICE_OBJECT *child;
+                            BOOLEAN        found = FALSE;
 
-                            pDevExt->pDeviceData->ulTgtIndex = pDevRel->Count - 1;
+                            child = pDevExt->pDeviceData->previousChildren;
 
-                            DkCreateAndAttachTgt(pDevExt, pDevRel->Objects[pDevRel->Count - 1]);
+                            while (*child != NULL)
+                            {
+                                if (*child == pDevRel->Objects[i])
+                                {
+                                    found = TRUE;
+                                    break;
+                                }
+                                child++;
+                            }
+
+                            if (found == FALSE)
+                            {
+                                /* New device attached */
+                                DkCreateAndAttachTgt(pDevExt,
+                                                     pDevRel->Objects[i]);
+                            }
                         }
+
+                        ExFreePool(pDevExt->pDeviceData->previousChildren);
+                        pDevExt->pDeviceData->previousChildren = NULL;
                     }
-                    else
+
+                    if (pDevExt->pDeviceData->previousChildren == NULL)
                     {
-                        // Do nothing
+                        PDEVICE_OBJECT *children;
+                        ULONG i;
+
+                        children =
+                            ExAllocatePoolWithTag(NonPagedPool,
+                                                  sizeof(PDEVICE_OBJECT) *
+                                                  (pDevRel->Count + 1),
+                                                  DKPORT_MTAG);
+
+                        if (children != NULL)
+                        {
+                            for (i = 0; i < pDevRel->Count; i++)
+                            {
+                                children[i] = pDevRel->Objects[i];
+                            }
+
+                            /* NULL-terminate the array */
+                            children[pDevRel->Count] = NULL;
+
+                            pDevExt->pDeviceData->previousChildren = children;
+                        }
+                        else
+                        {
+                            /* Failed to allocate memory. Just leave it
+                             * as it. In next pass we won't check for
+                             * new devices (probably will miss some).
+                             * But it's probably the best we can do.
+                             */
+                            DkDbgStr("Failed to allocate previousChildren");
+                        }
                     }
                 }
             }

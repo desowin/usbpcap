@@ -53,7 +53,16 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pParentDevExt, PIRP pIrp)
         pDevExt->pDeviceData->numberOfEndpoints = 0;
         pDevExt->pDeviceData->endpoints = NULL;
 
-        pDevExt->pDeviceData->ulTgtIndex = 0;
+        pDevExt->pDeviceData->previousChildren =
+            (PDEVICE_OBJECT*)ExAllocatePoolWithTag(NonPagedPool,
+                                                   sizeof(PDEVICE_OBJECT),
+                                                   DKPORT_MTAG);
+        if (pDevExt->pDeviceData->previousChildren == NULL)
+        {
+            ntStat = STATUS_INSUFFICIENT_RESOURCES;
+            goto EndFunc;
+        }
+        pDevExt->pDeviceData->previousChildren[0] = NULL;
 
         /* Allocate USBPCAP_ROOTHUB_DATA */
         pDevExt->pDeviceData->pData =
@@ -117,6 +126,12 @@ EndFunc:
                 }
                 ExFreePool((PVOID)pDevExt->pDeviceData->pData);
                 pDevExt->pDeviceData->pData = NULL;
+            }
+
+            if (pDevExt->pDeviceData->previousChildren != NULL)
+            {
+                ExFreePool((PVOID)pDevExt->pDeviceData->previousChildren);
+                pDevExt->pDeviceData->previousChildren = NULL;
             }
 
             ExFreePool((PVOID)pDevExt->pDeviceData);
@@ -207,7 +222,16 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
         pDevExt->pDeviceData->numberOfEndpoints = 0;
         pDevExt->pDeviceData->endpoints = NULL;
 
-        pDevExt->pDeviceData->ulTgtIndex = 0;
+        pDevExt->pDeviceData->previousChildren =
+            (PDEVICE_OBJECT*)ExAllocatePoolWithTag(NonPagedPool,
+                                                   sizeof(PDEVICE_OBJECT),
+                                                   DKPORT_MTAG);
+        if (pDevExt->pDeviceData->previousChildren == NULL)
+        {
+            ntStat = STATUS_INSUFFICIENT_RESOURCES;
+            goto EndAttDev;
+        }
+        pDevExt->pDeviceData->previousChildren[0] = NULL;
 
         pDevExt->pDeviceData->pData = pParentDevExt->pDeviceData->pData;
     }
@@ -248,6 +272,10 @@ EndAttDev:
     {
         if (pDevExt != NULL && pDevExt->pDeviceData != NULL)
         {
+            if (pDevExt->pDeviceData->previousChildren != NULL)
+            {
+                ExFreePool((PVOID)pDevExt->pDeviceData->previousChildren);
+            }
             ExFreePool((PVOID)pDevExt->pDeviceData);
             pDevExt->pDeviceData = NULL;
         }
