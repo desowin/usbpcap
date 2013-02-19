@@ -142,7 +142,9 @@ NTSTATUS DkTgtCompletePendedIrp(PWCH szFuncName, ULONG ulFuncNameByteLen, PUCHAR
 
     pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
 
-    pIrp = IoCsqRemoveNextIrp(&pDevExt->ioCsq, NULL);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
+    pIrp = IoCsqRemoveNextIrp(&pDevExt->context.control.ioCsq, NULL);
     if (pIrp == NULL)
     {
         DkQueAdd(szFuncName, ulFuncNameByteLen, pDat, ulDatByteLen, ushIsOut);

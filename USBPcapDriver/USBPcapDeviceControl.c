@@ -42,13 +42,15 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                 {
                     ntStat = STATUS_BUFFER_TOO_SMALL;
                 }
-                else if (pDevExt->pRootHubObject)
+                else if (pDevExt->context.control.pRootHubObject)
                 {
                     ntStat = STATUS_ACCESS_DENIED;
                 }
                 else
                 {
-                    ntStat = DkCreateAndAttachHubFilt(pDevExt, pIrp);
+                    PDEVICE_OBJECT pFilter = NULL;
+                    ntStat = DkCreateAndAttachHubFilt(pDevExt, pIrp, &pFilter);
+                    pDevExt->context.control.pRootHubObject = pFilter;
                 }
                 break;
 
@@ -56,19 +58,19 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             case IOCTL_DKSYSPORT_STOP_MON:
                 // If there is no root hub object rejest this request
                 // This IOCTL blocks until all targets are removed
-                if (pDevExt->pRootHubObject == NULL)
+                if (pDevExt->context.control.pRootHubObject == NULL)
                 {
                     ntStat = STATUS_ACCESS_DENIED;
                 }
                 else
                 {
-                    PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->pRootHubObject->DeviceExtension;
+                    PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
 
                     IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
                     IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
 
                     DkDetachAndDeleteHubFilt(rootExt);
-                    pDevExt->pRootHubObject = NULL;
+                    pDevExt->context.control.pRootHubObject = NULL;
                 }
                 break;
 
@@ -194,9 +196,7 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 1);
 
-            USBPcapAnalyzeURB(pUrb, FALSE,
-                              pDevExt->pDeviceData,
-                              pDevExt->pDeviceData->pData);
+            USBPcapAnalyzeURB(pUrb, FALSE, pDevExt->context.usb.pDeviceData);
         }
 
         // Forward this request to bus driver or next lower object
@@ -245,9 +245,7 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 0);
 
-            USBPcapAnalyzeURB(pUrb, TRUE,
-                              pDevExt->pDeviceData,
-                              pDevExt->pDeviceData->pData);
+            USBPcapAnalyzeURB(pUrb, TRUE, pDevExt->context.usb.pDeviceData);
         }
         else
         {

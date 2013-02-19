@@ -30,13 +30,11 @@ NTSTATUS DkAddDevice(PDRIVER_OBJECT pDrvObj, PDEVICE_OBJECT pPhysDevObj)
     pDevExt->pThisDevObj = pDeviceObject;
     pDevExt->pDrvObj = pDrvObj;
 
-    pDevExt->pDeviceData = NULL;
-
     IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
 
-    KeInitializeSpinLock(&pDevExt->csqSpinLock);
-    InitializeListHead(&pDevExt->lePendIrp);
-    ntStat = IoCsqInitialize(&pDevExt->ioCsq,
+    KeInitializeSpinLock(&pDevExt->context.control.csqSpinLock);
+    InitializeListHead(&pDevExt->context.control.lePendIrp);
+    ntStat = IoCsqInitialize(&pDevExt->context.control.ioCsq,
         DkCsqInsertIrp, DkCsqRemoveIrp, DkCsqPeekNextIrp, DkCsqAcquireLock,
         DkCsqReleaseLock, DkCsqCompleteCanceledIrp);
     if (!NT_SUCCESS(ntStat))
@@ -139,13 +137,14 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             IoSkipCurrentIrpStackLocation(pIrp);
             ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
 
-            if (pDevExt->pRootHubObject != NULL)
+            if (pDevExt->context.control.pRootHubObject != NULL)
             {
-                PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->pRootHubObject->DeviceExtension;
+                PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
 
                 IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
                 IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
                 DkDetachAndDeleteHubFilt(rootExt);
+                pDevExt->context.control.pRootHubObject = NULL;
             }
             IoReleaseRemoveLockAndWait(&pDevExt->removeLock, (PVOID) pIrp);
 
@@ -219,7 +218,8 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
 
 NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIrp)
 {
-    NTSTATUS   ntStat = STATUS_SUCCESS;
+    NTSTATUS             ntStat = STATUS_SUCCESS;
+    PUSBPCAP_DEVICE_DATA  pDeviceData = pDevExt->context.usb.pDeviceData;
 
     ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
@@ -243,14 +243,14 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
                 USHORT address;
                 NTSTATUS status;
 
-                status = USBPcapGetDeviceUSBAddress(pDevExt->pDeviceData->pNextParentFlt,
+                status = USBPcapGetDeviceUSBAddress(pDeviceData->pNextParentFlt,
                                                     pDevExt->pNextDevObj,
                                                     &address);
 
                 if (NT_SUCCESS(status))
                 {
                     DkDbgVal("Started device", address);
-                    pDevExt->pDeviceData->deviceAddress = address;
+                    pDeviceData->deviceAddress = address;
                 }
                 else
                 {
@@ -291,6 +291,7 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
 {
     NTSTATUS             ntStat = STATUS_SUCCESS;
     PDEVICE_RELATIONS    pDevRel = NULL;
+    PUSBPCAP_DEVICE_DATA pDeviceData = pDevExt->context.usb.pDeviceData;
 
     ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
@@ -328,14 +329,14 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                      *
                      * It's not critical though, so don't bugcheck.
                      */
-                    if (pDevExt->pDeviceData->previousChildren != NULL)
+                    if (pDeviceData->previousChildren != NULL)
                     {
                         for (i = 0; i < pDevRel->Count; i++)
                         {
                             PDEVICE_OBJECT *child;
                             BOOLEAN        found = FALSE;
 
-                            child = pDevExt->pDeviceData->previousChildren;
+                            child = pDeviceData->previousChildren;
 
                             while (*child != NULL)
                             {
@@ -355,11 +356,11 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                             }
                         }
 
-                        ExFreePool(pDevExt->pDeviceData->previousChildren);
-                        pDevExt->pDeviceData->previousChildren = NULL;
+                        ExFreePool(pDeviceData->previousChildren);
+                        pDeviceData->previousChildren = NULL;
                     }
 
-                    if (pDevExt->pDeviceData->previousChildren == NULL)
+                    if (pDeviceData->previousChildren == NULL)
                     {
                         PDEVICE_OBJECT *children;
                         ULONG i;
@@ -380,7 +381,7 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                             /* NULL-terminate the array */
                             children[pDevRel->Count] = NULL;
 
-                            pDevExt->pDeviceData->previousChildren = children;
+                            pDeviceData->previousChildren = children;
                         }
                         else
                         {

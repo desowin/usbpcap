@@ -161,10 +161,10 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
  * post is TRUE when the request returns from the bus driver
  */
 VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
-                       PUSBPCAP_DEVICE_DATA pDeviceData,
-                       PUSBPCAP_ROOTHUB_DATA pRootHub)
+                       PUSBPCAP_DEVICE_DATA pDeviceData)
 {
     struct _URB_HEADER *header;
+    PUSBPCAP_ROOTHUB_DATA pRootHub = pDeviceData->pData;
 
     ASSERT(pUrb != NULL);
     ASSERT(pRootHub != NULL);

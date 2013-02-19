@@ -117,7 +117,8 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
                     if (pQueDat == NULL)
                     {
-                        IoCsqInsertIrp(&pDevExt->ioCsq, pIrp, NULL);
+                        IoCsqInsertIrp(&pDevExt->context.control.ioCsq,
+                                       pIrp, NULL);
                         IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
                         return STATUS_PENDING;
                     }

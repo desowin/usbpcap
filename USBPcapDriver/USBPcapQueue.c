@@ -5,12 +5,17 @@ VOID DkCsqInsertIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
 {
     PDEVICE_EXTENSION   pDevExt = NULL;
 
-    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION, ioCsq);
+    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
+                                context.control.ioCsq);
     if (pDevExt == NULL)
     {
         return;
     }
-    InsertTailList(&pDevExt->lePendIrp, &pIrp->Tail.Overlay.ListEntry);
+
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
+    InsertTailList(&pDevExt->context.control.lePendIrp,
+                   &pIrp->Tail.Overlay.ListEntry);
 }
 
 VOID DkCsqRemoveIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
@@ -29,12 +34,16 @@ PIRP DkCsqPeekNextIrp(__in PIO_CSQ pCsq, __in PIRP pIrp, __in PVOID pCtx)
     PLIST_ENTRY         pNextList = NULL, pHeadList = NULL;
     PIO_STACK_LOCATION  pStack = NULL;
 
-    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION, ioCsq);
+    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
+                                context.control.ioCsq);
     if (pDevExt == NULL)
     {
         return NULL;
     }
-    pHeadList = &pDevExt->lePendIrp;
+
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
+    pHeadList = &pDevExt->context.control.lePendIrp;
 
     if (pIrp == NULL)
     {
@@ -73,8 +82,12 @@ VOID DkCsqAcquireLock(__in PIO_CSQ pCsq, __out __drv_out_deref(__drv_savesIRQL) 
 {
     PDEVICE_EXTENSION  pDevExt = NULL;
 
-    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION, ioCsq);
-    KeAcquireSpinLock(&pDevExt->csqSpinLock, pKIrql);
+    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
+                                context.control.ioCsq);
+
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
+    KeAcquireSpinLock(&pDevExt->context.control.csqSpinLock, pKIrql);
 }
 
 __drv_requiresIRQL(DISPATCH_LEVEL)
@@ -82,8 +95,12 @@ VOID DkCsqReleaseLock(__in PIO_CSQ pCsq, __in __drv_in(__drv_restoresIRQL) KIRQL
 {
     PDEVICE_EXTENSION  pDevExt = NULL;
 
-    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION, ioCsq);
-    KeReleaseSpinLock(&pDevExt->csqSpinLock, kIrql);
+    pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
+                                context.control.ioCsq);
+
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
+    KeReleaseSpinLock(&pDevExt->context.control.csqSpinLock, kIrql);
 }
 
 VOID DkCsqCompleteCanceledIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
@@ -103,18 +120,22 @@ VOID DkCsqCleanUpQueue(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
     while (TRUE)
     {
-        pPendIrp = IoCsqRemoveNextIrp(&pDevExt->ioCsq, (PVOID)pStack->FileObject);
+        pPendIrp = IoCsqRemoveNextIrp(&pDevExt->context.control.ioCsq,
+                                      (PVOID)pStack->FileObject);
         if (pPendIrp == NULL)
         {
             break;
         }
         else
         {
-            DkCsqCompleteCanceledIrp(&pDevExt->ioCsq, pPendIrp);
+            DkCsqCompleteCanceledIrp(&pDevExt->context.control.ioCsq,
+                                     pPendIrp);
         }
     }
 }

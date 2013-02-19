@@ -2,10 +2,147 @@
 #include "USBPcapHelperFunctions.h"
 #include "USBPcapTables.h"
 
+
+/*
+ * Frees pDevExt.context.usb.pDeviceData
+ *
+ * If freeParentData is TRUE, frees pDevExt.context.usb.pDeviceData.pData
+ * as well.
+ */
+static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt,
+                                  IN BOOLEAN freeParentData)
+{
+    PUSBPCAP_DEVICE_DATA  pDeviceData;
+
+    if (pDevExt == NULL)
+    {
+        return;
+    }
+
+    ASSERT((freeParentData == TRUE &&
+            pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB) ||
+           (freeParentData == FALSE &&
+            pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE));
+
+    pDeviceData = pDevExt->context.usb.pDeviceData;
+
+    if (pDeviceData != NULL)
+    {
+        if (pDeviceData->endpoints != NULL)
+        {
+            USBPcapRemoveDeviceEndpoints(pDeviceData->pData,
+                                         pDeviceData);
+        }
+
+        if (freeParentData == TRUE && pDeviceData->pData != NULL)
+        {
+            if (pDeviceData->pData->endpointTable != NULL)
+            {
+                USBPcapFreeEndpointTable(pDeviceData->pData->endpointTable);
+            }
+            ExFreePool((PVOID)pDeviceData->pData);
+            pDeviceData->pData = NULL;
+        }
+
+        if (pDeviceData->previousChildren != NULL)
+        {
+            ExFreePool((PVOID)pDeviceData->previousChildren);
+            pDeviceData->previousChildren = NULL;
+        }
+
+        ExFreePool((PVOID)pDeviceData);
+        pDevExt->context.usb.pDeviceData = NULL;
+    }
+}
+
+/*
+ * Allocates USBPCAP_DEVICE_DATA.
+ * If pParentExt is USBPCAP_MAGIC_SYSTEM, allocate USBPCAP_ROOTHUB_DATA
+ * as well, otherwise set the pData pointer for parent pData.
+ */
+static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
+                                          IN PDEVICE_EXTENSION pParentDevExt)
+{
+    PUSBPCAP_DEVICE_DATA  pDeviceData;
+    NTSTATUS              status = STATUS_SUCCESS;
+    BOOLEAN               allocRoothubData;
+
+    allocRoothubData = (pParentDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+
+    /* Allocate USBPCAP_DEVICE_DATA */
+    pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
+                                        sizeof(USBPCAP_DEVICE_DATA),
+                                        DKPORT_MTAG);
+
+    if (pDeviceData != NULL)
+    {
+        pDeviceData->deviceAddress = 255; /* UNKNOWN */
+        pDeviceData->numberOfEndpoints = 0;
+        pDeviceData->endpoints = NULL;
+
+        pDeviceData->previousChildren =
+            (PDEVICE_OBJECT*)ExAllocatePoolWithTag(NonPagedPool,
+                                                   sizeof(PDEVICE_OBJECT),
+                                                   DKPORT_MTAG);
+        if (pDeviceData->previousChildren == NULL)
+        {
+            status = STATUS_INSUFFICIENT_RESOURCES;
+        }
+        else
+        {
+            pDeviceData->previousChildren[0] = NULL;
+        }
+
+        if (allocRoothubData == FALSE)
+        {
+            pDeviceData->pData = pParentDevExt->context.usb.pDeviceData->pData;
+        }
+        else
+        {
+            /* Allocate USBPCAP_ROOTHUB_DATA */
+            pDeviceData->pData =
+                ExAllocatePoolWithTag(NonPagedPool,
+                                      sizeof(USBPCAP_ROOTHUB_DATA),
+                                      DKPORT_MTAG);
+            if (pDeviceData->pData != NULL)
+            {
+                KeInitializeSpinLock(&pDeviceData->pData->endpointTableSpinLock);
+                pDeviceData->pData->endpointTable = USBPcapInitializeEndpointTable(NULL);
+            }
+            else
+            {
+                status = STATUS_INSUFFICIENT_RESOURCES;
+            }
+        }
+    }
+    else
+    {
+        status = STATUS_INSUFFICIENT_RESOURCES;
+    }
+
+    pDevExt->context.usb.pDeviceData = pDeviceData;
+
+    if (!NT_SUCCESS(status))
+    {
+        USBPcapFreeDeviceData(pDevExt, (pParentDevExt == NULL));
+    }
+    else
+    {
+        /* Set up parent and target objects in USBPCAP_DEVICE_DATA */
+        pDeviceData->pParentFlt = pParentDevExt->pThisDevObj;
+        pDeviceData->pNextParentFlt = pParentDevExt->pNextDevObj;
+    }
+
+    return status;
+}
+
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
 //
-NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pParentDevExt, PIRP pIrp)
+// Filter object is set to new filter device on success
+NTSTATUS DkCreateAndAttachHubFilt(IN PDEVICE_EXTENSION pParentDevExt,
+                                  IN PIRP pIrp,
+                                  OUT PDEVICE_OBJECT *pFilter)
 {
     NTSTATUS          ntStat = STATUS_SUCCESS;
     UNICODE_STRING    usTgtName;
@@ -43,46 +180,10 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pParentDevExt, PIRP pIrp)
     pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
 
     pDevExt->pDrvObj = pParentDevExt->pDrvObj;
-    pDevExt->pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
-                                                 sizeof(USBPCAP_DEVICE_DATA),
-                                                 DKPORT_MTAG);
 
-    if (pDevExt->pDeviceData != NULL)
+    ntStat = USBPcapAllocateDeviceData(pDevExt, pParentDevExt);
+    if (!NT_SUCCESS(ntStat))
     {
-        pDevExt->pDeviceData->deviceAddress = 255; /* Unknown */
-        pDevExt->pDeviceData->numberOfEndpoints = 0;
-        pDevExt->pDeviceData->endpoints = NULL;
-
-        pDevExt->pDeviceData->previousChildren =
-            (PDEVICE_OBJECT*)ExAllocatePoolWithTag(NonPagedPool,
-                                                   sizeof(PDEVICE_OBJECT),
-                                                   DKPORT_MTAG);
-        if (pDevExt->pDeviceData->previousChildren == NULL)
-        {
-            ntStat = STATUS_INSUFFICIENT_RESOURCES;
-            goto EndFunc;
-        }
-        pDevExt->pDeviceData->previousChildren[0] = NULL;
-
-        /* Allocate USBPCAP_ROOTHUB_DATA */
-        pDevExt->pDeviceData->pData =
-            ExAllocatePoolWithTag(NonPagedPool,
-                                  sizeof(USBPCAP_ROOTHUB_DATA),
-                                  DKPORT_MTAG);
-        if (pDevExt->pDeviceData->pData != NULL)
-        {
-            KeInitializeSpinLock(&pDevExt->pDeviceData->pData->endpointTableSpinLock);
-            pDevExt->pDeviceData->pData->endpointTable = USBPcapInitializeEndpointTable(NULL);
-        }
-        else
-        {
-            ntStat = STATUS_INSUFFICIENT_RESOURCES;
-            goto EndFunc;
-        }
-    }
-    else
-    {
-        ntStat = STATUS_INSUFFICIENT_RESOURCES;
         goto EndFunc;
     }
 
@@ -96,18 +197,12 @@ NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pParentDevExt, PIRP pIrp)
         goto EndFunc;
     }
 
-    /* Set up parent and target object in USBPCAP_DEVICE_DATA */
-    pDevExt->pDeviceData->pParentFlt = pParentDevExt->pThisDevObj;
-    pDevExt->pDeviceData->pNextParentFlt = pParentDevExt->pNextDevObj;
-    pDevExt->pDeviceData->pTargetObj = pDevExt->pThisDevObj;
-    pDevExt->pDeviceData->pNextTargetObj = pDevExt->pNextDevObj;
-
     pHubFilter->Flags |=
         (pDevExt->pNextDevObj->Flags & (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE));
 
     pHubFilter->Flags &= ~DO_DEVICE_INITIALIZING;
 
-    pParentDevExt->pRootHubObject = pHubFilter;
+    *pFilter = pHubFilter;
 
     IoAcquireRemoveLock(pDevExt->parentRemoveLock, NULL);
 
@@ -116,28 +211,7 @@ EndFunc:
     // If something bad happened
     if (!NT_SUCCESS(ntStat))
     {
-        if (pDevExt != NULL && pDevExt->pDeviceData != NULL)
-        {
-            if (pDevExt->pDeviceData->pData != NULL)
-            {
-                if (pDevExt->pDeviceData->pData->endpointTable != NULL)
-                {
-                    USBPcapFreeEndpointTable(pDevExt->pDeviceData->pData->endpointTable);
-                }
-                ExFreePool((PVOID)pDevExt->pDeviceData->pData);
-                pDevExt->pDeviceData->pData = NULL;
-            }
-
-            if (pDevExt->pDeviceData->previousChildren != NULL)
-            {
-                ExFreePool((PVOID)pDevExt->pDeviceData->previousChildren);
-                pDevExt->pDeviceData->previousChildren = NULL;
-            }
-
-            ExFreePool((PVOID)pDevExt->pDeviceData);
-            pDevExt->pDeviceData = NULL;
-        }
-
+        USBPcapFreeDeviceData(pDevExt, TRUE);
         if (pHubFilter)
         {
             IoDeleteDevice(pHubFilter);
@@ -166,26 +240,8 @@ VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt)
         IoDeleteDevice(pDevExt->pThisDevObj);
         pDevExt->pThisDevObj = NULL;
     }
-    if (pDevExt->pDeviceData)
-    {
-        if (pDevExt->pDeviceData->pData)
-        {
-            USBPcapFreeEndpointTable(pDevExt->pDeviceData->pData->endpointTable);
-            ExFreePool(pDevExt->pDeviceData->pData);
-            pDevExt->pDeviceData->pData = NULL;
-        }
-
-        if (pDevExt->pDeviceData->endpoints != NULL)
-        {
-            ExFreePool((PVOID)pDevExt->pDeviceData->endpoints);
-            pDevExt->pDeviceData->endpoints = NULL;
-        }
-        ExFreePool(pDevExt->pDeviceData);
-        pDevExt->pDeviceData = NULL;
-    }
+    USBPcapFreeDeviceData(pDevExt, TRUE);
 }
-
-
 
 ////////////////////////////////////////////////////////////////////////////
 // Functions to attach and detach target device object
@@ -212,32 +268,9 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
     pDevExt->pThisDevObj = pDeviceObject;
     pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
 
-    /* Allocate USBPCAP_DEVICE_DATA */
-    pDevExt->pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
-                                                 sizeof(USBPCAP_DEVICE_DATA),
-                                                 DKPORT_MTAG);
-    if (pDevExt->pDeviceData != NULL)
+    ntStat = USBPcapAllocateDeviceData(pDevExt, pParentDevExt);
+    if (!NT_SUCCESS(ntStat))
     {
-        pDevExt->pDeviceData->deviceAddress = 0;
-        pDevExt->pDeviceData->numberOfEndpoints = 0;
-        pDevExt->pDeviceData->endpoints = NULL;
-
-        pDevExt->pDeviceData->previousChildren =
-            (PDEVICE_OBJECT*)ExAllocatePoolWithTag(NonPagedPool,
-                                                   sizeof(PDEVICE_OBJECT),
-                                                   DKPORT_MTAG);
-        if (pDevExt->pDeviceData->previousChildren == NULL)
-        {
-            ntStat = STATUS_INSUFFICIENT_RESOURCES;
-            goto EndAttDev;
-        }
-        pDevExt->pDeviceData->previousChildren[0] = NULL;
-
-        pDevExt->pDeviceData->pData = pParentDevExt->pDeviceData->pData;
-    }
-    else
-    {
-        ntStat = STATUS_INSUFFICIENT_RESOURCES;
         goto EndAttDev;
     }
 
@@ -254,11 +287,6 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
         goto EndAttDev;
     }
 
-    /* Set up parent and target objects in USBPCAP_DEVICE_DATA */
-    pDevExt->pDeviceData->pParentFlt = pParentDevExt->pThisDevObj;
-    pDevExt->pDeviceData->pNextParentFlt = pParentDevExt->pNextDevObj;
-    pDevExt->pDeviceData->pTargetObj = pDevExt->pThisDevObj;
-    pDevExt->pDeviceData->pNextTargetObj = pDevExt->pNextDevObj;
 
     // 4. Set up some filter device object flags
     pDevExt->pThisDevObj->Flags |=
@@ -270,15 +298,7 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
 EndAttDev:
     if (!NT_SUCCESS(ntStat))
     {
-        if (pDevExt != NULL && pDevExt->pDeviceData != NULL)
-        {
-            if (pDevExt->pDeviceData->previousChildren != NULL)
-            {
-                ExFreePool((PVOID)pDevExt->pDeviceData->previousChildren);
-            }
-            ExFreePool((PVOID)pDevExt->pDeviceData);
-            pDevExt->pDeviceData = NULL;
-        }
+        USBPcapFreeDeviceData(pDevExt, FALSE);
         if (pDeviceObject)
         {
             IoDeleteDevice(pDeviceObject);
@@ -291,6 +311,8 @@ EndAttDev:
 
 VOID DkDetachAndDeleteTgt(PDEVICE_EXTENSION pDevExt)
 {
+    PUSBPCAP_DEVICE_DATA  pDeviceData = pDevExt->context.usb.pDeviceData;
+
     if (pDevExt->parentRemoveLock)
     {
         IoReleaseRemoveLock(pDevExt->parentRemoveLock, NULL);
@@ -305,13 +327,7 @@ VOID DkDetachAndDeleteTgt(PDEVICE_EXTENSION pDevExt)
         IoDeleteDevice(pDevExt->pThisDevObj);
         pDevExt->pThisDevObj = NULL;
     }
-    if (pDevExt->pDeviceData)
-    {
-        USBPcapRemoveDeviceEndpoints(pDevExt->pDeviceData->pData,
-                                     pDevExt->pDeviceData);
-        ExFreePool((PVOID)pDevExt->pDeviceData);
-        pDevExt->pDeviceData = NULL;
-    }
+    USBPcapFreeDeviceData(pDevExt, FALSE);
 }
 
 

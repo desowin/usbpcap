@@ -34,12 +34,8 @@ typedef struct _USBPCAP_ROOTHUB_DATA
 typedef struct _DEVICE_DATA
 {
     /* pParentFlt and pNextParentFlt are NULL for RootHub */
-    PDEVICE_OBJECT  pParentFlt;      /* Parent filter object */
-    PDEVICE_OBJECT  pNextParentFlt;  /* Lower object of Parent filter object */
-
-    /* Those are always valid */
-    PDEVICE_OBJECT  pTargetObj;     /* Target filter object */
-    PDEVICE_OBJECT  pNextTargetObj; /* Lower object of target object */
+    PDEVICE_OBJECT  pParentFlt;     /* Parent filter object */
+    PDEVICE_OBJECT  pNextParentFlt; /* Lower object of Parent filter object */
 
     /* Previous children. Used when receive IRP_MN_QUERY_DEVICE_RELATION. Always NULL-terminated, non-NULL */
     PDEVICE_OBJECT  *previousChildren;
@@ -59,20 +55,31 @@ typedef struct _DEVICE_DATA
 // Device extension structure for this object
 //
 typedef struct DEVICE_EXTENSION_Tag {
-    UINT32          deviceMagic;     /* determines device type */
-    PDEVICE_OBJECT  pThisDevObj;     // This device object pointer
-    PDEVICE_OBJECT  pNextDevObj;     // Lower object of this object
-    PDRIVER_OBJECT  pDrvObj;         // Driver object pointer
-    IO_REMOVE_LOCK  removeLock;       // Remove lock for this object
+    UINT32          deviceMagic;      /* determines device type */
+    PDEVICE_OBJECT  pThisDevObj;      /* This device object pointer */
+    PDEVICE_OBJECT  pNextDevObj;      /* Lower object of this object */
+    PDRIVER_OBJECT  pDrvObj;          /* Driver object pointer */
+    IO_REMOVE_LOCK  removeLock;       /* Remove lock for this object */
     PIO_REMOVE_LOCK parentRemoveLock; /* Pointer to parent remove lock */
 
-    PDEVICE_OBJECT  pRootHubObject;  /* Root Hub object */
+    union
+    {
+        /* For USBPCAP_MAGIC_SYSTEM */
+        struct
+        {
+            PDEVICE_OBJECT  pRootHubObject;  /* Root Hub object */
 
-    LIST_ENTRY      lePendIrp;       // Used by I/O Cancel-Safe
-    IO_CSQ          ioCsq;           // I/O Cancel-Safe object
-    KSPIN_LOCK      csqSpinLock;     // Spin lock object for I/O Cancel-Safe
+            LIST_ENTRY      lePendIrp;       // Used by I/O Cancel-Safe
+            IO_CSQ          ioCsq;           // I/O Cancel-Safe object
+            KSPIN_LOCK      csqSpinLock;     // Spin lock object for I/O Cancel-Safe
+        } control;
 
-    PUSBPCAP_DEVICE_DATA   pDeviceData; /* Device data */
+        /* For USBPCAP_MAGIC_ROOTHUB or USBPCAP_MAGIC_DEVICE */
+        struct
+        {
+            PUSBPCAP_DEVICE_DATA   pDeviceData; /* Device data */
+        } usb;
+    } context;
 } DEVICE_EXTENSION, *PDEVICE_EXTENSION;
 
 
@@ -155,7 +162,8 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
 ///////////////////////////////////////////////////////////////////////////
 // Create and attach hub filter objects routine
 //
-NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp);
+NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp,
+                                  PDEVICE_OBJECT *pFilter);
 
 
 ///////////////////////////////////////////////////////////////////////////
