@@ -92,6 +92,7 @@ PUSBPCAP_ENDPOINT_INFO USBPcapGetEndpointInfo(IN PRTL_GENERIC_TABLE table,
     return &pInfo->info;
 }
 
+RTL_GENERIC_FREE_ROUTINE USBPcapFreeRoutine;
 static VOID
 USBPcapFreeRoutine(IN PRTL_GENERIC_TABLE table,
                    IN PVOID buffer)
@@ -99,6 +100,7 @@ USBPcapFreeRoutine(IN PRTL_GENERIC_TABLE table,
     ExFreePool(buffer);
 }
 
+RTL_GENERIC_ALLOCATE_ROUTINE USBPcapAllocateRoutine;
 static PVOID
 USBPcapAllocateRoutine(IN PRTL_GENERIC_TABLE table,
                        IN CLONG size)
@@ -108,6 +110,7 @@ USBPcapAllocateRoutine(IN PRTL_GENERIC_TABLE table,
                                  USBPCAP_TABLE_TAG);
 }
 
+RTL_GENERIC_COMPARE_ROUTINE USBPcapCompareEndpointInfo;
 static RTL_GENERIC_COMPARE_RESULTS
 USBPcapCompareEndpointInfo(IN PRTL_GENERIC_TABLE table,
                            IN PVOID first,

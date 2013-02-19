@@ -133,7 +133,14 @@ PCHAR DkDbgGetUSBFunc(USHORT usFuncCode)
             pChRes = "URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE";
             break;
 
+#if (_WIN32_WINNT >= 0x0600)
+        case URB_FUNCTION_CONTROL_TRANSFER_EX:
+            pChRes = "URB_FUNCTION_CONTROL_TRANSFER_EX";
+            break;
+#endif
+
         default:
+            DkDbgVal("Unknown usb function code", usFuncCode);
             pChRes = "Unknown usb function code!";
             break;
     }
@@ -274,7 +281,14 @@ PWCHAR DkDbgGetUSBFuncW(USHORT usFuncCode)
             pChRes = L"URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE";
             break;
 
+#if (_WIN32_WINNT >= 0x0600)
+        case URB_FUNCTION_CONTROL_TRANSFER_EX:
+            pChRes = L"URB_FUNCTION_CONTROL_TRANSFER_EX";
+            break;
+#endif
+
         default:
+            DkDbgVal("Unknown usb function code", usFuncCode);
             pChRes = L"Unknown usb function code!";
             break;
     }

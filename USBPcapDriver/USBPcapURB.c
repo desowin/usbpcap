@@ -122,36 +122,39 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
         USBPcapRemoveDeviceEndpoints(pRootHub, pDeviceData);
     }
     pDeviceData->numberOfEndpoints = numberOfEndpoints;
-    pDeviceData->endpoints =
-        ExAllocatePoolWithTag(NonPagedPool,
-                              sizeof(USBD_PIPE_HANDLE)*numberOfEndpoints,
-                              DKPORT_MTAG);
 
-    /* Second pass:
-     * * Store pipe handles in endpoints array
-     */
-    pInterface = pInformation;
-    interfaces_len = length;
-
-    i = 0;
-    endpoint = 0;
-    while (interfaces_len > 0)
+    if (numberOfEndpoints > 0)
     {
-        PUSBD_PIPE_INFORMATION Pipe = pInterface->Pipes;
+        pDeviceData->endpoints =
+            ExAllocatePoolWithTag(NonPagedPool,
+                                  sizeof(USBD_PIPE_HANDLE)*numberOfEndpoints,
+                                  DKPORT_MTAG);
 
-        for (j=0; j<pInterface->NumberOfPipes; ++j, Pipe++)
+        /* Second pass:
+         * * Store pipe handles in endpoints array
+         */
+        pInterface = pInformation;
+        interfaces_len = length;
+
+        i = 0;
+        endpoint = 0;
+        while (interfaces_len > 0)
         {
-            pDeviceData->endpoints[endpoint] = Pipe->PipeHandle;
-            endpoint++;
+            PUSBD_PIPE_INFORMATION Pipe = pInterface->Pipes;
+
+            for (j=0; j<pInterface->NumberOfPipes; ++j, Pipe++)
+            {
+                pDeviceData->endpoints[endpoint] = Pipe->PipeHandle;
+                endpoint++;
+            }
+
+            /* Advance to next interface */
+            i++;
+            interfaces_len -= pInterface->Length;
+            pInterface = (PUSBD_INTERFACE_INFORMATION)
+                             ((PUCHAR)pInterface + pInterface->Length);
         }
-
-        /* Advance to next interface */
-        i++;
-        interfaces_len -= pInterface->Length;
-        pInterface = (PUSBD_INTERFACE_INFORMATION)
-                         ((PUCHAR)pInterface + pInterface->Length);
     }
-
 }
 
 /*

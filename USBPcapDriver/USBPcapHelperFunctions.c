@@ -153,6 +153,13 @@ NTSTATUS USBPcapGetTargetDevicePort(PDEVICE_OBJECT pdo_device,
         return STATUS_INVALID_DEVICE_REQUEST;
     }
 
+    if (length == 0)
+    {
+        /* Protect against allocating 0 bytes */
+        DkDbgStr("Location length is zero");
+        return STATUS_INVALID_DEVICE_REQUEST;
+    }
+
     location = (PWCHAR)ExAllocatePoolWithTag(NonPagedPool,
                                              length,
                                              ' COL');
@@ -230,6 +237,13 @@ NTSTATUS USBPcapGetPDODriverKey(PDEVICE_OBJECT pdo_device,
          *
          * This return statement should newer be executed.
          */
+        return STATUS_INVALID_DEVICE_REQUEST;
+    }
+
+    if (length == 0)
+    {
+        /* Protect against allocating 0 bytes */
+        DkDbgStr("Location length is zero");
         return STATUS_INVALID_DEVICE_REQUEST;
     }
 
@@ -322,7 +336,7 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
 
     pnameLength = name.ActualLength +
                   sizeof(WCHAR) + /* Extra data to NULL-terminate */
-                  sizeof(USB_NODE_CONNECTION_DRIVERKEY_NAME),
+                  sizeof(USB_NODE_CONNECTION_DRIVERKEY_NAME);
     *ppname = (PUSB_NODE_CONNECTION_DRIVERKEY_NAME)
                   ExAllocatePoolWithTag(NonPagedPool, pnameLength, 'EDON');
 

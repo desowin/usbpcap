@@ -353,8 +353,9 @@ NTSTATUS DkGetHubDevName(PIO_STACK_LOCATION pStack, PIRP pIrp, PULONG pUlRes)
         return ntStat;
     }
 
+    usTgtDev.Length = 0;
     usTgtDev.MaximumLength = 512;
-    usTgtDev.Buffer = (PWCH) ExAllocatePoolWithTag(NonPagedPool, 512, DKPORT_MTAG);
+    usTgtDev.Buffer = (PWSTR) ExAllocatePoolWithTag(NonPagedPool, 512, DKPORT_MTAG);
     RtlFillMemory(usTgtDev.Buffer, 512, '\0');
 
     ntStat = ZwQuerySymbolicLinkObject(hObj, &usTgtDev, &ulRet);
