@@ -24,33 +24,36 @@
 #include "USBPcapQueue.h"
 #include "include\USBPcap.h"
 
-
 typedef struct _USBPCAP_ROOTHUB_DATA
 {
-    KSPIN_LOCK         endpointTableSpinLock;
-    PRTL_GENERIC_TABLE endpointTable;
+    /* TRUE if the roothub data is being monitored */
+    volatile BOOLEAN       filtered;
+
+    /* Reference count. To be used only with InterlockedXXX calls. */
+    volatile LONG          refCount;
 } USBPCAP_ROOTHUB_DATA, *PUSBPCAP_ROOTHUB_DATA;
 
 typedef struct _DEVICE_DATA
 {
     /* pParentFlt and pNextParentFlt are NULL for RootHub */
-    PDEVICE_OBJECT  pParentFlt;     /* Parent filter object */
-    PDEVICE_OBJECT  pNextParentFlt; /* Lower object of Parent filter object */
+    PDEVICE_OBJECT         pParentFlt;     /* Parent filter object */
+    PDEVICE_OBJECT         pNextParentFlt; /* Lower object of Parent filter */
 
     /* Previous children. Used when receive IRP_MN_QUERY_DEVICE_RELATIONS */
-    PDEVICE_OBJECT  *previousChildren;
+    PDEVICE_OBJECT         *previousChildren;
 
     /* TRUE if the parentPort, isHub and deviceAddress are correct */
-    BOOLEAN   properData;
+    BOOLEAN                properData;
 
-    ULONG     parentPort; /* Parent port number the device is attached to */
-    BOOLEAN   isHub;      /* TRUE if device is hub */
+    /* Parent port number the device is attached to */
+    ULONG                  parentPort;
+    BOOLEAN                isHub; /* TRUE if device is hub */
 
-    USHORT                deviceAddress;
-    USHORT                numberOfEndpoints;
-    USBD_PIPE_HANDLE      *endpoints; /* Array of endpoint handles */
+    USHORT                 deviceAddress;
+    KSPIN_LOCK             endpointTableSpinLock;
+    PRTL_GENERIC_TABLE     endpointTable;
 
-    PUSBPCAP_ROOTHUB_DATA  pData;       /* Roothub data */
+    PUSBPCAP_ROOTHUB_DATA  pRootData;
 } USBPCAP_DEVICE_DATA, *PUSBPCAP_DEVICE_DATA;
 
 #define USBPCAP_MAGIC_SYSTEM   0xBAD51571

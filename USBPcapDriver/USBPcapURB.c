@@ -56,29 +56,17 @@ VOID USBPcapPrintChars(PCHAR text, PUCHAR buffer, ULONG length)
 
 static VOID
 USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
-                                 PUSBPCAP_ROOTHUB_DATA pRootHub,
                                  PUSBD_INTERFACE_INFORMATION pInterface,
-                                 USHORT length)
+                                 USHORT interfaces_len)
 {
     ULONG i, j;
-    USHORT interfaces_len;
-    USHORT deviceAddress;
     KIRQL irql;
-    USHORT numberOfEndpoints;
-    USHORT endpoint;
     PUSBD_INTERFACE_INFORMATION pInformation = pInterface;
 
-    deviceAddress = pDeviceData->deviceAddress;
-
-    interfaces_len = length;
-
-
-    /* First pass:
+    /*
      * * Iterate over all interfaces in search for pipe handles
      * * Add endpoint information to enpoint table
-     * * Count endpoints
      */
-    numberOfEndpoints = 0;
     i = 0;
     while (interfaces_len > 0)
     {
@@ -100,14 +88,13 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
                     Pipe->PipeType,
                     Pipe->PipeHandle));
 
-            KeAcquireSpinLock(&pRootHub->endpointTableSpinLock,
+            KeAcquireSpinLock(&pDeviceData->endpointTableSpinLock,
                               &irql);
-            USBPcapAddEndpointInfo(pRootHub->endpointTable,
+            USBPcapAddEndpointInfo(pDeviceData->endpointTable,
                                    Pipe,
-                                   deviceAddress);
-            KeReleaseSpinLock(&pRootHub->endpointTableSpinLock,
+                                   pDeviceData->deviceAddress);
+            KeReleaseSpinLock(&pDeviceData->endpointTableSpinLock,
                               irql);
-            numberOfEndpoints++;
         }
 
         /* Advance to next interface */
@@ -115,45 +102,6 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
         interfaces_len -= pInterface->Length;
         pInterface = (PUSBD_INTERFACE_INFORMATION)
                          ((PUCHAR)pInterface + pInterface->Length);
-    }
-
-    if (pDeviceData->endpoints != NULL)
-    {
-        USBPcapRemoveDeviceEndpoints(pRootHub, pDeviceData);
-    }
-    pDeviceData->numberOfEndpoints = numberOfEndpoints;
-
-    if (numberOfEndpoints > 0)
-    {
-        pDeviceData->endpoints =
-            ExAllocatePoolWithTag(NonPagedPool,
-                                  sizeof(USBD_PIPE_HANDLE)*numberOfEndpoints,
-                                  DKPORT_MTAG);
-
-        /* Second pass:
-         * * Store pipe handles in endpoints array
-         */
-        pInterface = pInformation;
-        interfaces_len = length;
-
-        i = 0;
-        endpoint = 0;
-        while (interfaces_len > 0)
-        {
-            PUSBD_PIPE_INFORMATION Pipe = pInterface->Pipes;
-
-            for (j=0; j<pInterface->NumberOfPipes; ++j, Pipe++)
-            {
-                pDeviceData->endpoints[endpoint] = Pipe->PipeHandle;
-                endpoint++;
-            }
-
-            /* Advance to next interface */
-            i++;
-            interfaces_len -= pInterface->Length;
-            pInterface = (PUSBD_INTERFACE_INFORMATION)
-                             ((PUCHAR)pInterface + pInterface->Length);
-        }
     }
 }
 
@@ -167,10 +115,8 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
                        PUSBPCAP_DEVICE_DATA pDeviceData)
 {
     struct _URB_HEADER *header;
-    PUSBPCAP_ROOTHUB_DATA pRootHub = pDeviceData->pData;
 
     ASSERT(pUrb != NULL);
-    ASSERT(pRootHub != NULL);
 
     header = (struct _URB_HEADER*)pUrb;
 
@@ -200,7 +146,6 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
                     pUrb->UrbHeader.Length, interfaces_len));
 
             USBPcapParseInterfaceInformation(pDeviceData,
-                                             pRootHub,
                                              &pSelectConfiguration->Interface,
                                              interfaces_len);
             break;
@@ -230,7 +175,6 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
                     pUrb->UrbHeader.Length, interfaces_len));
 
             USBPcapParseInterfaceInformation(pDeviceData,
-                                             pRootHub,
                                              &pSelectInterface->Interface,
                                              interfaces_len);
             break;
@@ -286,7 +230,7 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
 
             DkDbgStr("URB_FUNCTION_BULK_OR_INTERRUPT_TRANSFER");
             DkDbgVal("", transfer->PipeHandle);
-            epFound = USBPcapRetrieveEndpointInfo(pRootHub,
+            epFound = USBPcapRetrieveEndpointInfo(pDeviceData,
                                                   transfer->PipeHandle,
                                                   &info);
             DkDbgVal("", transfer->TransferFlags);

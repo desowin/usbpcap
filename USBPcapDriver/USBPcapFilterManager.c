@@ -5,12 +5,8 @@
 
 /*
  * Frees pDevExt.context.usb.pDeviceData
- *
- * If freeParentData is TRUE, frees pDevExt.context.usb.pDeviceData.pData
- * as well.
  */
-static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt,
-                                  IN BOOLEAN freeParentData)
+static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt)
 {
     PUSBPCAP_DEVICE_DATA  pDeviceData;
 
@@ -19,29 +15,33 @@ static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt,
         return;
     }
 
-    ASSERT((freeParentData == TRUE &&
-            pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB) ||
-           (freeParentData == FALSE &&
-            pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE));
+    ASSERT((pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB) ||
+           (pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE));
 
     pDeviceData = pDevExt->context.usb.pDeviceData;
 
     if (pDeviceData != NULL)
     {
-        if (pDeviceData->endpoints != NULL)
+        if (pDeviceData->pRootData)
         {
-            USBPcapRemoveDeviceEndpoints(pDeviceData->pData,
-                                         pDeviceData);
+            LONG count;
+
+            count = InterlockedDecrement(&pDeviceData->pRootData->refCount);
+            if (count == 0)
+            {
+                /*
+                 * RootHub is supposed to hold the last reference.
+                 * So if we enter here, this data can be safely removed.
+                 */
+                ExFreePool((PVOID)pDeviceData->pRootData);
+                pDeviceData->pRootData = NULL;
+            }
         }
 
-        if (freeParentData == TRUE && pDeviceData->pData != NULL)
+        if (pDeviceData->endpointTable != NULL)
         {
-            if (pDeviceData->pData->endpointTable != NULL)
-            {
-                USBPcapFreeEndpointTable(pDeviceData->pData->endpointTable);
-            }
-            ExFreePool((PVOID)pDeviceData->pData);
-            pDeviceData->pData = NULL;
+            USBPcapFreeEndpointTable(pDeviceData->endpointTable);
+            pDeviceData->endpointTable = NULL;
         }
 
         if (pDeviceData->previousChildren != NULL)
@@ -57,8 +57,6 @@ static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt,
 
 /*
  * Allocates USBPCAP_DEVICE_DATA.
- * If pParentExt is USBPCAP_MAGIC_SYSTEM, allocate USBPCAP_ROOTHUB_DATA
- * as well, otherwise set the pData pointer for parent pData.
  */
 static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
                                           IN PDEVICE_EXTENSION pParentDevExt)
@@ -81,8 +79,6 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
          */
 
         pDeviceData->deviceAddress = 255; /* UNKNOWN */
-        pDeviceData->numberOfEndpoints = 0;
-        pDeviceData->endpoints = NULL;
 
         /* This will get changed to TRUE once the deviceAddress,
          * parentPort and isHub will be correctly set up.
@@ -98,25 +94,42 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
 
         if (allocRoothubData == FALSE)
         {
-            pDeviceData->pData = pParentDevExt->context.usb.pDeviceData->pData;
+            /*
+             * This is not a roothub, just get the roothub data pointer
+             * and increment the reference count
+             */
+            pDeviceData->pRootData =
+                pParentDevExt->context.usb.pDeviceData->pRootData;
+            InterlockedIncrement(&pDeviceData->pRootData->refCount);
         }
         else
         {
             /* Allocate USBPCAP_ROOTHUB_DATA */
-            pDeviceData->pData =
+            pDeviceData->pRootData =
                 ExAllocatePoolWithTag(NonPagedPool,
                                       sizeof(USBPCAP_ROOTHUB_DATA),
                                       DKPORT_MTAG);
-            if (pDeviceData->pData != NULL)
+            if (pDeviceData->pRootData != NULL)
             {
-                KeInitializeSpinLock(&pDeviceData->pData->endpointTableSpinLock);
-                pDeviceData->pData->endpointTable = USBPcapInitializeEndpointTable(NULL);
+                /* Setup initial filtering state to TRUE */
+                pDeviceData->pRootData->filtered = TRUE;
+
+                /*
+                 * Set the reference count
+                 *
+                 * The reference count will drop down to zero once the
+                 * roothub filter object gets destroyed.
+                 */
+                pDeviceData->pRootData->refCount = 1L;
             }
             else
             {
                 status = STATUS_INSUFFICIENT_RESOURCES;
             }
         }
+
+        KeInitializeSpinLock(&pDeviceData->endpointTableSpinLock);
+        pDeviceData->endpointTable = USBPcapInitializeEndpointTable(NULL);
     }
     else
     {
@@ -127,7 +140,7 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
 
     if (!NT_SUCCESS(status))
     {
-        USBPcapFreeDeviceData(pDevExt, (pParentDevExt == NULL));
+        USBPcapFreeDeviceData(pDevExt);
     }
     else
     {
@@ -214,7 +227,7 @@ EndFunc:
     // If something bad happened
     if (!NT_SUCCESS(ntStat))
     {
-        USBPcapFreeDeviceData(pDevExt, TRUE);
+        USBPcapFreeDeviceData(pDevExt);
         if (pHubFilter)
         {
             IoDeleteDevice(pHubFilter);
@@ -243,7 +256,7 @@ VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt)
         IoDeleteDevice(pDevExt->pThisDevObj);
         pDevExt->pThisDevObj = NULL;
     }
-    USBPcapFreeDeviceData(pDevExt, TRUE);
+    USBPcapFreeDeviceData(pDevExt);
 }
 
 ////////////////////////////////////////////////////////////////////////////
@@ -302,7 +315,7 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
 EndAttDev:
     if (!NT_SUCCESS(ntStat))
     {
-        USBPcapFreeDeviceData(pDevExt, FALSE);
+        USBPcapFreeDeviceData(pDevExt);
         if (pDeviceObject)
         {
             IoDeleteDevice(pDeviceObject);
@@ -331,7 +344,7 @@ VOID DkDetachAndDeleteTgt(PDEVICE_EXTENSION pDevExt)
         IoDeleteDevice(pDevExt->pThisDevObj);
         pDevExt->pThisDevObj = NULL;
     }
-    USBPcapFreeDeviceData(pDevExt, FALSE);
+    USBPcapFreeDeviceData(pDevExt);
 }
 
 

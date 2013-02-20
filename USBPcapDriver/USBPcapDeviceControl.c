@@ -65,12 +65,28 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                 else
                 {
                     PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+                    PUSBPCAP_DEVICE_DATA pDeviceData = rootExt->context.usb.pDeviceData;
 
-                    IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
-                    IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
+                    if (pDeviceData != NULL &&
+                        pDeviceData->pRootData != NULL &&
+                        pDeviceData->pRootData->refCount > 1)
+                    {
+                        DkDbgVal("Cannot stop filter",
+                                 pDeviceData->pRootData->refCount);
 
-                    DkDetachAndDeleteHubFilt(rootExt);
-                    pDevExt->context.control.pRootHubObject = NULL;
+                        /* There are child objects, block this request */
+                        ntStat = STATUS_ACCESS_DENIED;
+                    }
+                    else
+                    {
+                        IoAcquireRemoveLock(&rootExt->removeLock,
+                                            (PVOID) pIrp);
+                        IoReleaseRemoveLockAndWait(&rootExt->removeLock,
+                                                   (PVOID) pIrp);
+
+                        DkDetachAndDeleteHubFilt(rootExt);
+                        pDevExt->context.control.pRootHubObject = NULL;
+                    }
                 }
                 break;
 

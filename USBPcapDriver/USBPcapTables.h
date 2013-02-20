@@ -41,11 +41,8 @@ VOID USBPcapFreeEndpointTable(IN PRTL_GENERIC_TABLE table);
 PRTL_GENERIC_TABLE USBPcapInitializeEndpointTable(IN PVOID context);
 
 
-BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_ROOTHUB_DATA pRootHub,
+BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_DEVICE_DATA pDeviceData,
                                     IN USBD_PIPE_HANDLE handle,
                                     PUSBPCAP_ENDPOINT_INFO pInfo);
-
-VOID USBPcapRemoveDeviceEndpoints(PUSBPCAP_ROOTHUB_DATA pRootHub,
-                                  PUSBPCAP_DEVICE_DATA  pDevice);
 
 #endif /* USBPCAP_TABLES_H */
