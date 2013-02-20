@@ -294,6 +294,8 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
     PAGED_CODE();
     ASSERT(KeGetCurrentIrql() <= PASSIVE_LEVEL);
 
+    parent = IoGetAttachedDeviceReference(parent);
+
     KeInitializeEvent(&event, NotificationEvent, FALSE);
 
     name.ConnectionIndex = port;
@@ -309,6 +311,7 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
 
     if (irp == NULL)
     {
+        ObDereferenceObject((PVOID)parent);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -324,6 +327,7 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
     if (!NT_SUCCESS(status))
     {
         DkDbgVal("IOCTL_USB_GET_DRIVERKEY_NAME (#1) failed", status);
+        ObDereferenceObject((PVOID)parent);
         return status;
     }
 
@@ -342,6 +346,7 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
 
     if (*ppname == NULL)
     {
+        ObDereferenceObject((PVOID)parent);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -365,6 +370,7 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
     {
         ExFreePool((PVOID)*ppname);
         *ppname = NULL;
+        ObDereferenceObject((PVOID)parent);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -376,6 +382,8 @@ NTSTATUS USBPcapGetDriverKeyName(PDEVICE_OBJECT parent,
         KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
         status = ioStatus.Status;
     }
+
+    ObDereferenceObject((PVOID)parent);
 
     if (!NT_SUCCESS(status))
     {
@@ -499,6 +507,8 @@ NTSTATUS USBPcapGetNumberOfPorts(PDEVICE_OBJECT parent,
     /* FIXME: check if parent is hub or composite device */
     info.NodeType = UsbHub;
 
+    parent = IoGetAttachedDeviceReference(parent);
+
     KeInitializeEvent(&event, NotificationEvent, FALSE);
 
     irp = IoBuildDeviceIoControlRequest(IOCTL_USB_GET_NODE_INFORMATION,
@@ -511,6 +521,7 @@ NTSTATUS USBPcapGetNumberOfPorts(PDEVICE_OBJECT parent,
 
     if (irp == NULL)
     {
+        ObDereferenceObject((PVOID)parent);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -522,6 +533,8 @@ NTSTATUS USBPcapGetNumberOfPorts(PDEVICE_OBJECT parent,
         KeWaitForSingleObject(&event, Executive, KernelMode, FALSE, NULL);
         status = ioStatus.Status;
     }
+
+    ObDereferenceObject((PVOID)parent);
 
     if (!NT_SUCCESS(status))
     {
@@ -558,6 +571,8 @@ NTSTATUS USBPcapGetNodeInformation(PDEVICE_OBJECT hub,
     PAGED_CODE();
     ASSERT(KeGetCurrentIrql() <= PASSIVE_LEVEL);
 
+    hub = IoGetAttachedDeviceReference(hub);
+
     info->ConnectionIndex = port;
 
     KeInitializeEvent(&event, NotificationEvent, FALSE);
@@ -573,6 +588,7 @@ NTSTATUS USBPcapGetNodeInformation(PDEVICE_OBJECT hub,
 
     if (irp == NULL)
     {
+        ObDereferenceObject((PVOID)hub);
         return STATUS_INSUFFICIENT_RESOURCES;
     }
 
@@ -588,6 +604,8 @@ NTSTATUS USBPcapGetNodeInformation(PDEVICE_OBJECT hub,
 
         status = ioStatus.Status;
     }
+
+    ObDereferenceObject((PVOID)hub);
 
     if (!NT_SUCCESS(status))
     {
@@ -634,36 +652,52 @@ NTSTATUS USBPcapPrintUSBPChildrenInformation(PDEVICE_OBJECT hub)
 }
 #endif
 
+/*
+ * On success updates pDevExt->context.usb.pDeviceData's fields:
+ * parentPort, isHub, deviceAddress.
+ */
 __drv_requiresIRQL(PASSIVE_LEVEL)
-NTSTATUS USBPcapGetDeviceUSBAddress(PDEVICE_OBJECT hub,
-                                    PDEVICE_OBJECT device,
-                                    PUSHORT address)
+NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
 {
     USB_NODE_CONNECTION_INFORMATION info;
     NTSTATUS status;
     ULONG maxIndex;
     ULONG idx;
     ULONG port;
-
+    PDEVICE_OBJECT hub;
     PDEVICE_OBJECT devicePdo;
 
     PAGED_CODE();
     ASSERT(KeGetCurrentIrql() <= PASSIVE_LEVEL);
 
-    status = USBPcapGetTargetDevicePdo(device, &devicePdo);
-    if (!NT_SUCCESS(status))
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE);
+
+    /* 0 indicates that we didn't yet query the device port */
+    if (pDevExt->context.usb.pDeviceData->parentPort == 0)
     {
-        DkDbgStr("Failed to get target device PDO!");
-        return status;
+        status = USBPcapGetTargetDevicePdo(pDevExt->pNextDevObj, &devicePdo);
+        if (!NT_SUCCESS(status))
+        {
+            DkDbgStr("Failed to get target device PDO!");
+            return status;
+        }
+
+        hub = pDevExt->context.usb.pDeviceData->pNextParentFlt;
+
+        status = USBPcapGetTargetDevicePort(hub, devicePdo, &port);
+        ObDereferenceObject((PVOID)devicePdo);
+
+        if (!NT_SUCCESS(status))
+        {
+            DkDbgStr("Failed to get target device Port!");
+            return status;
+        }
+
+        pDevExt->context.usb.pDeviceData->parentPort = port;
     }
-
-    status = USBPcapGetTargetDevicePort(hub, devicePdo, &port);
-    ObDereferenceObject((PVOID)devicePdo);
-
-    if (!NT_SUCCESS(status))
+    else
     {
-        DkDbgStr("Failed to get target device Port!");
-        return status;
+        port = pDevExt->context.usb.pDeviceData->parentPort;
     }
 
     status = USBPcapGetNodeInformation(hub, port, &info);
@@ -671,11 +705,14 @@ NTSTATUS USBPcapGetDeviceUSBAddress(PDEVICE_OBJECT hub,
     if (NT_SUCCESS(status))
     {
         DkDbgVal("", info.DeviceAddress);
-        *address = info.DeviceAddress;
+
+        pDevExt->context.usb.pDeviceData->properData    = TRUE;
+        pDevExt->context.usb.pDeviceData->isHub         = info.DeviceIsHub;
+        pDevExt->context.usb.pDeviceData->deviceAddress = info.DeviceAddress;
     }
     else
     {
-        DkDbgStr("Failed to get device address");
+        DkDbgStr("Failed to get device information");
     }
 
     return status;

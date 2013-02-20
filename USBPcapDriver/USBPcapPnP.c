@@ -239,26 +239,32 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
             IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
+            if (NT_SUCCESS(USBPcapGetDeviceUSBInfo(pDevExt)))
             {
-                USHORT address;
-                NTSTATUS status;
-
-                status = USBPcapGetDeviceUSBAddress(pDeviceData->pNextParentFlt,
-                                                    pDevExt->pNextDevObj,
-                                                    &address);
-
-                if (NT_SUCCESS(status))
-                {
-                    DkDbgVal("Started device", address);
-                    pDeviceData->deviceAddress = address;
-                }
-                else
-                {
-                    DkDbgStr("Failed to get address of started device");
-                }
+                DkDbgVal("Started device", pDeviceData->deviceAddress);
+            }
+            else
+            {
+                DkDbgStr("Failed to get info of started device");
             }
             return ntStat;
 
+        case IRP_MN_QUERY_DEVICE_RELATIONS:
+            /* Keep track of, and create child devices only for hubs.
+             * Do not create child filters for composite devices.
+             */
+            if (pDeviceData->isHub == TRUE)
+            {
+                DkDbgStr("IRP_MN_QUERY_DEVICE_RELATIONS");
+                ntStat = DkHubFltPnpHandleQryDevRels(pDevExt, pStack, pIrp);
+
+                IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
+                return ntStat;
+            }
+            else
+            {
+                break;
+            }
 
         case IRP_MN_REMOVE_DEVICE:
             DkDbgStr("IRP_MN_REMOVE_DEVICE");
@@ -292,6 +298,7 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
     NTSTATUS             ntStat = STATUS_SUCCESS;
     PDEVICE_RELATIONS    pDevRel = NULL;
     PUSBPCAP_DEVICE_DATA pDeviceData = pDevExt->context.usb.pDeviceData;
+    ULONG                i;
 
     ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
     if (!NT_SUCCESS(ntStat))
@@ -318,26 +325,20 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                 pDevRel = (PDEVICE_RELATIONS) pIrp->IoStatus.Information;
                 if (pDevRel)
                 {
-                    ULONG i;
                     USBPcapPrintUSBPChildrenInformation(pDevExt->pNextDevObj);
 
                     DkDbgVal("Child(s) number", pDevRel->Count);
 
-                    /*
-                     * previousChildren should always be non-null
-                     * If it's NULL we will just possibly miss some devices.
-                     *
-                     * It's not critical though, so don't bugcheck.
-                     */
-                    if (pDeviceData->previousChildren != NULL)
+                    for (i = 0; i < pDevRel->Count; i++)
                     {
-                        for (i = 0; i < pDevRel->Count; i++)
+                        PDEVICE_OBJECT *child;
+                        BOOLEAN        found = FALSE;
+
+                        child = pDeviceData->previousChildren;
+
+                        /* Search only if there are any children */
+                        if (child != NULL)
                         {
-                            PDEVICE_OBJECT *child;
-                            BOOLEAN        found = FALSE;
-
-                            child = pDeviceData->previousChildren;
-
                             while (*child != NULL)
                             {
                                 if (*child == pDevRel->Objects[i])
@@ -347,23 +348,26 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                                 }
                                 child++;
                             }
-
-                            if (found == FALSE)
-                            {
-                                /* New device attached */
-                                DkCreateAndAttachTgt(pDevExt,
-                                                     pDevRel->Objects[i]);
-                            }
                         }
 
+                        if (found == FALSE)
+                        {
+                            /* New device attached */
+                            DkCreateAndAttachTgt(pDevExt,
+                                                 pDevRel->Objects[i]);
+                        }
+                    }
+
+                    /* Free old children information */
+                    if (pDeviceData->previousChildren != NULL)
+                    {
                         ExFreePool(pDeviceData->previousChildren);
                         pDeviceData->previousChildren = NULL;
                     }
 
-                    if (pDeviceData->previousChildren == NULL)
+                    if (pDevRel->Count > 0)
                     {
                         PDEVICE_OBJECT *children;
-                        ULONG i;
 
                         children =
                             ExAllocatePoolWithTag(NonPagedPool,

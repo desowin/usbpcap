@@ -31,9 +31,7 @@ NTSTATUS USBPcapPrintUSBPChildrenInformation(PDEVICE_OBJECT hub);
 #define USBPcapPrintUSBPChildrenInformation(hub) {}
 #endif
 
-NTSTATUS USBPcapGetDeviceUSBAddress(PDEVICE_OBJECT hub,
-                                    PDEVICE_OBJECT device,
-                                    PUSHORT address);
+NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt);
 
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, USBPcapGetTargetDevicePdo)
@@ -41,7 +39,7 @@ NTSTATUS USBPcapGetDeviceUSBAddress(PDEVICE_OBJECT hub,
 #if DBG
 #pragma alloc_text (PAGE, USBPcapPrintUSBPChildrenInformation)
 #endif
-#pragma alloc_text (PAGE, USBPcapGetDeviceUSBAddress)
+#pragma alloc_text (PAGE, USBPcapGetDeviceUSBInfo)
 #endif
 
 #endif /* USBPCAP_HELPER_FUNCTIONS_H */

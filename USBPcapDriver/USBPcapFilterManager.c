@@ -76,22 +76,25 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
 
     if (pDeviceData != NULL)
     {
+        /* deviceAddress, port and isHub will be properly set up when
+         * filter driver handles IRP_MN_START_DEVICE
+         */
+
         pDeviceData->deviceAddress = 255; /* UNKNOWN */
         pDeviceData->numberOfEndpoints = 0;
         pDeviceData->endpoints = NULL;
 
-        pDeviceData->previousChildren =
-            (PDEVICE_OBJECT*)ExAllocatePoolWithTag(NonPagedPool,
-                                                   sizeof(PDEVICE_OBJECT),
-                                                   DKPORT_MTAG);
-        if (pDeviceData->previousChildren == NULL)
-        {
-            status = STATUS_INSUFFICIENT_RESOURCES;
-        }
-        else
-        {
-            pDeviceData->previousChildren[0] = NULL;
-        }
+        /* This will get changed to TRUE once the deviceAddress,
+         * parentPort and isHub will be correctly set up.
+         */
+        pDeviceData->properData = FALSE;
+
+        /* Since 0 is invalid connection index, set that here */
+        pDeviceData->parentPort = 0;
+        /* assume that roothub is a hub and all other devices are not. */
+        pDeviceData->isHub = allocRoothubData;
+
+        pDeviceData->previousChildren = NULL;
 
         if (allocRoothubData == FALSE)
         {
@@ -175,11 +178,11 @@ NTSTATUS DkCreateAndAttachHubFilt(IN PDEVICE_EXTENSION pParentDevExt,
 
     pDevExt = (PDEVICE_EXTENSION) pHubFilter->DeviceExtension;
     pDevExt->deviceMagic = USBPCAP_MAGIC_ROOTHUB;
-    IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
     pDevExt->pThisDevObj = pHubFilter;
+    pDevExt->pDrvObj = pParentDevExt->pDrvObj;
     pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
 
-    pDevExt->pDrvObj = pParentDevExt->pDrvObj;
+    IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
 
     ntStat = USBPcapAllocateDeviceData(pDevExt, pParentDevExt);
     if (!NT_SUCCESS(ntStat))
@@ -267,6 +270,7 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
     pDevExt->deviceMagic = USBPCAP_MAGIC_DEVICE;
     pDevExt->pThisDevObj = pDeviceObject;
     pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
+    pDevExt->pDrvObj = pParentDevExt->pDrvObj;
 
     ntStat = USBPcapAllocateDeviceData(pDevExt, pParentDevExt);
     if (!NT_SUCCESS(ntStat))

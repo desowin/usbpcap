@@ -37,8 +37,14 @@ typedef struct _DEVICE_DATA
     PDEVICE_OBJECT  pParentFlt;     /* Parent filter object */
     PDEVICE_OBJECT  pNextParentFlt; /* Lower object of Parent filter object */
 
-    /* Previous children. Used when receive IRP_MN_QUERY_DEVICE_RELATION. Always NULL-terminated, non-NULL */
+    /* Previous children. Used when receive IRP_MN_QUERY_DEVICE_RELATIONS */
     PDEVICE_OBJECT  *previousChildren;
+
+    /* TRUE if the parentPort, isHub and deviceAddress are correct */
+    BOOLEAN   properData;
+
+    ULONG     parentPort; /* Parent port number the device is attached to */
+    BOOLEAN   isHub;      /* TRUE if device is hub */
 
     USHORT                deviceAddress;
     USHORT                numberOfEndpoints;
