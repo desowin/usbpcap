@@ -1,0 +1,65 @@
+/*
+ *  Copyright (c) 2013 Tomasz Moń <desowin@gmail.com>
+ *
+ *  This program is free software; you can redistribute it and/or modify
+ *  it under the terms of the GNU General Public License as published by
+ *  the Free Software Foundation; under version 2 of the License.
+ *
+ *  This program is distributed in the hope that it will be useful,
+ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
+ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ *  GNU General Public License for more details.
+ *
+ *  You should have received a copy of the GNU General Public License
+ *  along with this program.  If not, see <http://www.gnu.org/licenses>.
+ */
+
+#ifndef USBPCAP_BUFFER_H
+#define USBPCAP_BUFFER_H
+
+#include "USBPcapMain.h"
+
+
+#define USBPCAP_TRANSFER_ISOCHRONOUS 0
+#define USBPCAP_TRANSFER_INTERRUPT   1
+#define USBPCAP_TRANSFER_CONTROL     2
+#define USBPCAP_TRANSFER_BULK        3
+
+/* info byte fields:
+ * bit 0 (LSB) - when 1: PDO -> FDO
+ * bits 1-7: Reserved
+ */
+#define USBPCAP_INFO_PDO_TO_FDO  (1 << 0)
+
+#pragma pack(1)
+typedef struct
+{
+    USHORT       headerLen; /* This header length */
+    UINT64       irpId;     /* I/O Request packet ID */
+    USBD_STATUS  status;    /* USB status code (on return from host controller) */
+    USHORT       function;  /* URB Function */
+    UCHAR        info;      /* I/O Request info */
+
+    USHORT       bus;       /* bus (RootHub) number */
+    USHORT       device;    /* device address */
+    UCHAR        endpoint;  /* endpoint number and transfer direction */
+    UCHAR        transfer;  /* transfer type */
+
+    UINT32       dataLength;/* Data length */
+} USBPCAP_BUFFER_PACKET_HEADER, *PUSBPCAP_BUFFER_PACKET_HEADER;
+
+#define USBPCAP_CONTROL_STAGE_SETUP   0
+#define USBPCAP_CONTROL_STAGE_DATA    1
+#define USBPCAP_CONTROL_STAGE_STATUS  2
+
+#pragma pack(1)
+typedef struct
+{
+    USBPCAP_BUFFER_PACKET_HEADER  header;
+    UCHAR                         stage;
+} USBPCAP_BUFFER_CONTROL_HEADER, *PUSBPCAP_BUFFER_CONTROL_HEADER;
+
+NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
+                            UINT32 bytes);
+
+#endif /* USBPCAP_BUFFER_H */

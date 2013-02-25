@@ -26,6 +26,13 @@
 
 typedef struct _USBPCAP_ROOTHUB_DATA
 {
+    /* Circular-Buffer related variables */
+    KSPIN_LOCK             bufferLock;
+    PVOID                  buffer;
+    UINT32                 bufferSize;
+    UINT32                 readOffset;
+    UINT32                 writeOffset;
+
     /* TRUE if the roothub data is being monitored */
     volatile BOOLEAN       filtered;
 

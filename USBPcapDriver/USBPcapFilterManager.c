@@ -111,6 +111,13 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
                                       DKPORT_MTAG);
             if (pDeviceData->pRootData != NULL)
             {
+                /* Initialize empty buffer */
+                KeInitializeSpinLock(&pDeviceData->pRootData->bufferLock);
+                pDeviceData->pRootData->buffer = NULL;
+                pDeviceData->pRootData->readOffset = 0;
+                pDeviceData->pRootData->writeOffset = 0;
+                pDeviceData->pRootData->bufferSize = 0;
+
                 /* Setup initial filtering state to TRUE */
                 pDeviceData->pRootData->filtered = TRUE;
 
