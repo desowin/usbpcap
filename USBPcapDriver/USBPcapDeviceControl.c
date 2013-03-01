@@ -267,7 +267,8 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 1);
 
-            USBPcapAnalyzeURB(pUrb, FALSE, pDevExt->context.usb.pDeviceData);
+            USBPcapAnalyzeURB(pIrp, pUrb, FALSE,
+                              pDevExt->context.usb.pDeviceData);
         }
 
         // Forward this request to bus driver or next lower object
@@ -316,7 +317,8 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
             DkTgtCompletePendedIrp(usUSBFuncName.Buffer,
                 usUSBFuncName.Length, (PUCHAR) pUrb, pUrb->UrbHeader.Length, 0);
 
-            USBPcapAnalyzeURB(pUrb, TRUE, pDevExt->context.usb.pDeviceData);
+            USBPcapAnalyzeURB(pIrp, pUrb, TRUE,
+                              pDevExt->context.usb.pDeviceData);
         }
         else
         {

@@ -17,6 +17,7 @@
 #include "USBPcapMain.h"
 #include "USBPcapURB.h"
 #include "USBPcapTables.h"
+#include "USBPcapBuffer.h"
 
 #include <stddef.h> /* Required for offsetof macro */
 
@@ -53,6 +54,34 @@ VOID USBPcapPrintChars(PCHAR text, PUCHAR buffer, ULONG length)
 #else
 #define USBPcapPrintChars(text, buffer, length) {}
 #endif
+
+static PVOID USBPcapURBGetBufferPointer(ULONG length,
+                                        PVOID buffer,
+                                        PMDL  bufferMDL)
+{
+    ASSERT((length == 0) ||
+           ((length != 0) && (buffer != NULL || bufferMDL != NULL)));
+
+    if (length == 0)
+    {
+        return NULL;
+    }
+    else if (buffer != NULL)
+    {
+        return buffer;
+    }
+    else if (bufferMDL != NULL)
+    {
+        PVOID address = MmGetSystemAddressForMdlSafe(bufferMDL,
+                                                     NormalPagePriority);
+        return address;
+    }
+    else
+    {
+        DkDbgStr("Invalid buffer!");
+        return NULL;
+    }
+}
 
 static VOID
 USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
@@ -105,16 +134,92 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
     }
 }
 
+__inline static VOID
+USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
+                              struct _URB_HEADER* header,
+                              PUSBPCAP_DEVICE_DATA pDeviceData,
+                              PIRP pIrp,
+                              BOOLEAN post)
+{
+    USBPCAP_BUFFER_CONTROL_HEADER  packetHeader;
+
+    packetHeader.header.headerLen = sizeof(USBPCAP_BUFFER_CONTROL_HEADER);
+    packetHeader.header.irpId     = (UINT64) pIrp;
+    packetHeader.header.status    = header->Status;
+    packetHeader.header.function  = header->Function;
+    packetHeader.header.info      = 0;
+    if (post == TRUE)
+    {
+        packetHeader.header.info |= USBPCAP_INFO_PDO_TO_FDO;
+    }
+
+    packetHeader.header.bus      = pDeviceData->pRootData->busId;
+    packetHeader.header.device   = pDeviceData->deviceAddress;
+
+    if (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN)
+    {
+        packetHeader.header.endpoint = 0x80;
+    }
+    else
+    {
+        packetHeader.header.endpoint = 0;
+    }
+
+    packetHeader.header.transfer = USBPCAP_TRANSFER_CONTROL;
+
+    /* Add Setup stage to log only when on its way from FDO to PDO */
+    if (post == FALSE)
+    {
+        packetHeader.header.dataLength = 8;
+        packetHeader.stage = USBPCAP_CONTROL_STAGE_SETUP;
+        USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                 (PUSBPCAP_BUFFER_PACKET_HEADER)&packetHeader,
+                                 (PVOID)&transfer->SetupPacket[0]);
+    }
+
+    /* Add Data stage to log */
+    if (transfer->TransferBufferLength != 0 &&
+        ((post == FALSE &&
+        (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_OUT)) ||
+        ((post == TRUE) &&
+        !(transfer->TransferFlags & USBD_TRANSFER_DIRECTION_OUT))))
+    {
+        PVOID  transferBuffer;
+
+        packetHeader.header.dataLength = (UINT32)transfer->TransferBufferLength;
+        packetHeader.stage = USBPCAP_CONTROL_STAGE_DATA;
+
+        transferBuffer =
+            USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
+                                       transfer->TransferBuffer,
+                                       transfer->TransferBufferMDL);
+
+        USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                 (PUSBPCAP_BUFFER_PACKET_HEADER)&packetHeader,
+                                 transferBuffer);
+    }
+
+    /* Add Handshake stage to log when on its way from PDO to FDO */
+    if (post == TRUE)
+    {
+        packetHeader.header.dataLength = 0;
+        packetHeader.stage = USBPCAP_CONTROL_STAGE_STATUS;
+        USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                 (PUSBPCAP_BUFFER_PACKET_HEADER)&packetHeader,
+                                 NULL);
+    }
+}
+
 /*
  * Analyzes the URB
  *
  * post is FALSE when the request is being on its way to the bus driver
  * post is TRUE when the request returns from the bus driver
  */
-VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
+VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
                        PUSBPCAP_DEVICE_DATA pDeviceData)
 {
-    struct _URB_HEADER *header;
+    struct _URB_HEADER     *header;
 
     ASSERT(pUrb != NULL);
 
@@ -187,6 +292,8 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
             transfer = (struct _URB_CONTROL_TRANSFER*)pUrb;
 
             DkDbgStr("URB_FUNCTION_CONTROL_TRANSFER");
+            USBPcapAnalyzeControlTransfer(transfer, header,
+                                          pDeviceData, pIrp, post);
 
             DkDbgVal("", transfer->PipeHandle);
             USBPcapPrintChars("Setup Packet", &transfer->SetupPacket[0], 8);
@@ -202,11 +309,26 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
 #if (_WIN32_WINNT >= 0x0600)
         case URB_FUNCTION_CONTROL_TRANSFER_EX:
         {
+            struct _URB_CONTROL_TRANSFER     wrapTransfer;
             struct _URB_CONTROL_TRANSFER_EX* transfer;
+            USBPCAP_BUFFER_CONTROL_HEADER    packetHeader;
 
             transfer = (struct _URB_CONTROL_TRANSFER_EX*)pUrb;
 
-            DkDbgStr("URB_FUNCTION_CONTROL_TRANSFER");
+            DkDbgStr("URB_FUNCTION_CONTROL_TRANSFER_EX");
+
+            /* Copy the required data to wrapTransfer */
+            wrapTransfer.PipeHandle = transfer->PipeHandle;
+            wrapTransfer.TransferFlags = transfer->TransferFlags;
+            wrapTransfer.TransferBufferLength = transfer->TransferBufferLength;
+            wrapTransfer.TransferBuffer = transfer->TransferBuffer;
+            wrapTransfer.TransferBufferMDL = transfer->TransferBufferMDL;
+            RtlCopyMemory(&wrapTransfer.SetupPacket[0],
+                          &transfer->SetupPacket[0],
+                          8 /* Setup packet is always 8 bytes */);
+
+            USBPcapAnalyzeControlTransfer(&wrapTransfer, header,
+                                          pDeviceData, pIrp, post);
 
             DkDbgVal("", transfer->PipeHandle);
             USBPcapPrintChars("Setup Packet", &transfer->SetupPacket[0], 8);
@@ -225,6 +347,20 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
             struct _URB_BULK_OR_INTERRUPT_TRANSFER  *transfer;
             USBPCAP_ENDPOINT_INFO                   info;
             BOOLEAN                                 epFound;
+            USBPCAP_BUFFER_PACKET_HEADER            packetHeader;
+            PVOID                                   transferBuffer;
+
+            packetHeader.headerLen = sizeof(USBPCAP_BUFFER_PACKET_HEADER);
+            packetHeader.irpId     = (UINT64) pIrp;
+            packetHeader.status    = header->Status;
+            packetHeader.function  = header->Function;
+            packetHeader.info      = 0;
+            if (post == TRUE)
+            {
+                packetHeader.info |= USBPCAP_INFO_PDO_TO_FDO;
+            }
+
+            packetHeader.bus      = pDeviceData->pRootData->busId;
 
             transfer = (struct _URB_BULK_OR_INTERRUPT_TRANSFER*)pUrb;
 
@@ -233,6 +369,49 @@ VOID USBPcapAnalyzeURB(PURB pUrb, BOOLEAN post,
             epFound = USBPcapRetrieveEndpointInfo(pDeviceData,
                                                   transfer->PipeHandle,
                                                   &info);
+            if (epFound == TRUE)
+            {
+                packetHeader.device = info.deviceAddress;
+                packetHeader.endpoint = info.endpointAddress;
+
+                switch (info.type)
+                {
+                    case UsbdPipeTypeInterrupt:
+                        packetHeader.transfer = USBPCAP_TRANSFER_INTERRUPT;
+                        break;
+                    default:
+                        DkDbgVal("Invalid pipe type. Assuming bulk.",
+                                 info.type);
+                        /* Fall through */
+                    case UsbdPipeTypeBulk:
+                        packetHeader.transfer = USBPCAP_TRANSFER_BULK;
+                        break;
+                }
+            }
+            else
+            {
+                packetHeader.device = 0xFFFF;
+                packetHeader.endpoint = 0xFF;
+                packetHeader.transfer = USBPCAP_TRANSFER_BULK;
+            }
+
+            /* For IN endpoints, only add to log when post = TRUE,
+             * For OUT endpoints, only add to log when post = FALSE
+             */
+            if (((packetHeader.endpoint & 0x80) && (post == TRUE)) ||
+                (!(packetHeader.endpoint & 0x80) && (post == FALSE)))
+            {
+                packetHeader.dataLength = (UINT32)transfer->TransferBufferLength;
+
+                transferBuffer =
+                    USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
+                                               transfer->TransferBuffer,
+                                               transfer->TransferBufferMDL);
+
+                USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                         &packetHeader,
+                                         transferBuffer);
+            }
             DkDbgVal("", transfer->TransferFlags);
             DkDbgVal("", transfer->TransferBufferLength);
             DkDbgVal("", transfer->TransferBuffer);
