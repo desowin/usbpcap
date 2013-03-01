@@ -1,6 +1,8 @@
 #include "USBPcapMain.h"
 #include "include\USBPcap.h"
 #include "USBPcapURB.h"
+#include "USBPcapRootHubControl.h"
+#include "USBPcapBuffer.h"
 
 ///////////////////////////////////////////////////////////////////////
 // I/O device control request handlers
@@ -32,7 +34,7 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         IoSkipCurrentIrpStackLocation(pIrp);
         ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
     }
-    else
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM)
     {
         // Handle I/O device control request for attach and detach USB Hub
         switch (pStack->Parameters.DeviceIoControl.IoControlCode)
@@ -79,6 +81,13 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                     }
                     else
                     {
+                        if (pDeviceData != NULL &&
+                            pDeviceData->pRootData != NULL &&
+                            pDeviceData->pRootData->controlDevice != NULL)
+                        {
+                            USBPcapDeleteRootHubControlDevice(pDeviceData->pRootData->controlDevice);
+                        }
+
                         IoAcquireRemoveLock(&rootExt->removeLock,
                                             (PVOID) pIrp);
                         IoReleaseRemoveLockAndWait(&rootExt->removeLock,
@@ -115,6 +124,52 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
 
         DkCompleteRequest(pIrp, ntStat, ulRes);
+    }
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL)
+    {
+        PDEVICE_EXTENSION      rootExt;
+        PUSBPCAP_ROOTHUB_DATA  pRootData;
+
+        rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+        pRootData = (PUSBPCAP_ROOTHUB_DATA)rootExt->context.usb.pDeviceData->pRootData;
+
+        switch (pStack->Parameters.DeviceIoControl.IoControlCode)
+        {
+            case IOCTL_USBPCAP_SETUP_BUFFER:
+            {
+                PUSBPCAP_BUFFER_SIZE  pBufferSize;
+
+                if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                    sizeof(USBPCAP_BUFFER_SIZE))
+                {
+                    ntStat = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                pBufferSize = (PUSBPCAP_BUFFER_SIZE)pIrp->AssociatedIrp.SystemBuffer;
+                DkDbgVal("IOCTL_USBPCAP_SETUP_BUFFER", pBufferSize->size);
+
+                ntStat = USBPcapSetUpBuffer(pRootData, pBufferSize->size);
+                break;
+            }
+
+            case IOCTL_USBPCAP_START_FILTERING:
+                DkDbgStr("IOCTL_USBPCAP_START_FILTERING");
+                pRootData->filtered = TRUE;
+                break;
+
+            case IOCTL_USBPCAP_STOP_FILTERING:
+                DkDbgStr("IOCTL_USBPCAP_STOP_FILTERING");
+                pRootData->filtered = FALSE;
+                break;
+
+            default:
+                DkDbgVal("This: IOCTL_XXXXX", ctlCode);
+                ntStat = STATUS_INVALID_DEVICE_REQUEST;
+                break;
+        }
+
+        DkCompleteRequest(pIrp, ntStat, 0);
     }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);

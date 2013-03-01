@@ -1,4 +1,5 @@
 #include "USBPcapMain.h"
+#include "USBPcapBuffer.h"
 
 ////////////////////////////////////////////////////////////////////////////
 // Create, close and clean up handlers
@@ -97,7 +98,7 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         IoSkipCurrentIrpStackLocation(pIrp);
         ntStat = IoCallDriver(pNextDevObj, pIrp);
     }
-    else
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM)
     {
         // Handling Read/Write for this object
         switch (pStack->MajorFunction)
@@ -153,6 +154,37 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         }
 
         DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL)
+    {
+        UINT32 bytesRead = 0;
+        /* Handling Read/Write for control object */
+        switch (pStack->MajorFunction)
+        {
+            case IRP_MJ_READ:
+            {
+                ntStat = USBPcapBufferHandleReadIrp(pIrp, pDevExt,
+                                                    &bytesRead);
+                break;
+            }
+
+            case IRP_MJ_WRITE:
+                /* Writing to the control device is not supported */
+                ntStat = STATUS_NOT_SUPPORTED;
+                break;
+
+
+            default:
+                DkDbgVal("Unknown IRP Major function", pStack->MajorFunction);
+                ntStat = STATUS_INVALID_DEVICE_REQUEST;
+                break;
+        }
+
+        /* If the IRP was pended, do not call complete request */
+        if (ntStat != STATUS_PENDING)
+        {
+            DkCompleteRequest(pIrp, ntStat, (ULONG_PTR)bytesRead);
+        }
     }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);

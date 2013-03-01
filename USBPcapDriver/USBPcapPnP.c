@@ -1,5 +1,6 @@
 #include "USBPcapMain.h"
 #include "USBPcapHelperFunctions.h"
+#include "USBPcapRootHubControl.h"
 
 //
 // External global variables defined in DkSysPort.c
@@ -140,9 +141,18 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             if (pDevExt->context.control.pRootHubObject != NULL)
             {
                 PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+                PUSBPCAP_DEVICE_DATA pDeviceData = rootExt->context.usb.pDeviceData;
+
+                if (pDeviceData != NULL &&
+                    pDeviceData->pRootData != NULL &&
+                    pDeviceData->pRootData->controlDevice != NULL)
+                {
+                    USBPcapDeleteRootHubControlDevice(pDeviceData->pRootData->controlDevice);
+                }
 
                 IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
                 IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
+
                 DkDetachAndDeleteHubFilt(rootExt);
                 pDevExt->context.control.pRootHubObject = NULL;
             }

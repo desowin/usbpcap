@@ -1,7 +1,7 @@
 #include "USBPcapMain.h"
 #include "USBPcapHelperFunctions.h"
 #include "USBPcapTables.h"
-
+#include "USBPcapRootHubControl.h"
 
 /*
  * Frees pDevExt.context.usb.pDeviceData
@@ -33,6 +33,10 @@ static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt)
                  * RootHub is supposed to hold the last reference.
                  * So if we enter here, this data can be safely removed.
                  */
+                if (pDeviceData->pRootData->buffer != NULL)
+                {
+                    ExFreePool((PVOID)pDeviceData->pRootData->buffer);
+                }
                 ExFreePool((PVOID)pDeviceData->pRootData);
                 pDeviceData->pRootData = NULL;
             }
@@ -228,6 +232,21 @@ NTSTATUS DkCreateAndAttachHubFilt(IN PDEVICE_EXTENSION pParentDevExt,
     *pFilter = pHubFilter;
 
     IoAcquireRemoveLock(pDevExt->parentRemoveLock, NULL);
+
+    if (NT_SUCCESS(ntStat))
+    {
+        PDEVICE_OBJECT         control = NULL;
+        PUSBPCAP_ROOTHUB_DATA  pRootData;
+        USHORT                 id;
+
+        ntStat = USBPcapCreateRootHubControlDevice(pDevExt,
+                                                   &control,
+                                                   &id);
+
+        pRootData = pDevExt->context.usb.pDeviceData->pRootData;
+        pRootData->controlDevice = control;
+        pRootData->busId = id;
+    }
 
 EndFunc:
 

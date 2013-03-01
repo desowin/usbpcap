@@ -12,7 +12,8 @@ VOID DkCsqInsertIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
         return;
     }
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
+           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     InsertTailList(&pDevExt->context.control.lePendIrp,
                    &pIrp->Tail.Overlay.ListEntry);
@@ -41,7 +42,8 @@ PIRP DkCsqPeekNextIrp(__in PIO_CSQ pCsq, __in PIRP pIrp, __in PVOID pCtx)
         return NULL;
     }
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
+           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     pHeadList = &pDevExt->context.control.lePendIrp;
 
@@ -85,7 +87,8 @@ VOID DkCsqAcquireLock(__in PIO_CSQ pCsq, __out __drv_out_deref(__drv_savesIRQL) 
     pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
                                 context.control.ioCsq);
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
+           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     KeAcquireSpinLock(&pDevExt->context.control.csqSpinLock, pKIrql);
 }
@@ -98,7 +101,8 @@ VOID DkCsqReleaseLock(__in PIO_CSQ pCsq, __in __drv_in(__drv_restoresIRQL) KIRQL
     pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
                                 context.control.ioCsq);
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
+           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     KeReleaseSpinLock(&pDevExt->context.control.csqSpinLock, kIrql);
 }
@@ -120,7 +124,8 @@ VOID DkCsqCleanUpQueue(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
+           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 

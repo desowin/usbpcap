@@ -27,6 +27,7 @@ SOURCES = USBPcap.rc               \
           USBPcapMain.c            \
           USBPcapPnP.c             \
           USBPcapPower.c           \
+          USBPcapRootHubControl.c  \
           USBPcapQueue.c           \
           USBPcapTables.c          \
           USBPcapURB.c             \

@@ -38,6 +38,9 @@ typedef struct _USBPCAP_ROOTHUB_DATA
 
     /* Reference count. To be used only with InterlockedXXX calls. */
     volatile LONG          refCount;
+
+    USHORT                 busId; /* bus number */
+    PDEVICE_OBJECT         controlDevice;
 } USBPCAP_ROOTHUB_DATA, *PUSBPCAP_ROOTHUB_DATA;
 
 typedef struct _DEVICE_DATA
@@ -63,7 +66,8 @@ typedef struct _DEVICE_DATA
     PUSBPCAP_ROOTHUB_DATA  pRootData;
 } USBPCAP_DEVICE_DATA, *PUSBPCAP_DEVICE_DATA;
 
-#define USBPCAP_MAGIC_SYSTEM   0xBAD51571
+#define USBPCAP_MAGIC_SYSTEM   0xBAD51570
+#define USBPCAP_MAGIC_CONTROL  0xBAD51571
 #define USBPCAP_MAGIC_ROOTHUB  0xBAD51572
 #define USBPCAP_MAGIC_DEVICE   0xBAD51573
 
@@ -80,9 +84,10 @@ typedef struct DEVICE_EXTENSION_Tag {
 
     union
     {
-        /* For USBPCAP_MAGIC_SYSTEM */
+        /* For USBPCAP_MAGIC_CONTROL */
         struct
         {
+            USHORT          id;
             PDEVICE_OBJECT  pRootHubObject;  /* Root Hub object */
 
             LIST_ENTRY      lePendIrp;       // Used by I/O Cancel-Safe

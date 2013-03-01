@@ -336,6 +336,58 @@ NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
     return status;
 }
 
+NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
+                                    PDEVICE_EXTENSION pDevExt,
+                                    PUINT32 pBytesRead)
+{
+    PDEVICE_EXTENSION      pRootExt;
+    PUSBPCAP_ROOTHUB_DATA  pRootData;
+    PVOID                  buffer;
+    UINT32                 bufferLength;
+    UINT32                 bytesRead;
+    NTSTATUS               status;
+    KIRQL                  irql;
+    PIO_STACK_LOCATION     pStack = NULL;
+
+    pStack = IoGetCurrentIrpStackLocation(pIrp);
+
+    buffer       = pIrp->AssociatedIrp.SystemBuffer;
+    bufferLength = pStack->Parameters.Read.Length;
+
+    if (bufferLength <= 0)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    pRootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+    pRootData = pRootExt->context.usb.pDeviceData->pRootData;
+
+    if (pRootData->buffer == NULL)
+    {
+        return STATUS_UNSUCCESSFUL;
+    }
+
+    /* Get data from data queue, if there is no data we put
+     * this IRP to Cancel-Safe queue and return status pending
+     * otherwise complete this IRP then return SUCCESS
+     */
+    KeAcquireSpinLock(&pRootData->bufferLock, &irql);
+    bytesRead = USBPcapBufferRead(pRootData,
+                                  buffer, bufferLength);
+    KeReleaseSpinLock(&pRootData->bufferLock, irql);
+
+    *pBytesRead = bytesRead;
+    if (bytesRead == 0)
+    {
+        IoCsqInsertIrp(&pDevExt->context.control.ioCsq,
+                       pIrp, NULL);
+        return STATUS_PENDING;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+
 __inline static VOID
 USBPcapInitializePcapHeader(pcaprec_hdr_t *pcapHeader,
                             UINT32 bytes)
@@ -354,4 +406,81 @@ USBPcapInitializePcapHeader(pcaprec_hdr_t *pcapHeader,
 
     pcapHeader->incl_len = bytes;
     pcapHeader->orig_len = bytes;
+}
+
+NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                  PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                  PVOID buffer)
+{
+    UINT32             bytes;
+    KIRQL              irql;
+    NTSTATUS           status;
+    PDEVICE_EXTENSION  pControlExt;
+    PIRP               pIrp = NULL;
+    pcaprec_hdr_t      pcapHeader;
+
+    pControlExt = (PDEVICE_EXTENSION)pRootData->controlDevice->DeviceExtension;
+
+    ASSERT(pControlExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+
+    bytes = header->headerLen + header->dataLength;
+
+    USBPcapInitializePcapHeader(&pcapHeader, bytes);
+
+    bytes += sizeof(pcaprec_hdr_t);
+
+    status = STATUS_SUCCESS;
+
+    KeAcquireSpinLock(&pRootData->bufferLock, &irql);
+    if (USBPcapGetBufferFree(pRootData) < bytes)
+    {
+        DkDbgStr("No enough free space left.");
+        status = STATUS_INSUFFICIENT_RESOURCES;
+    }
+    else
+    {
+        /* Write Packet Header */
+        USBPcapBufferWriteUnsafe(pRootData,
+                                 (PVOID) &pcapHeader,
+                                 (UINT32) sizeof(pcaprec_hdr_t));
+
+        /* Write USBPCAP_BUFFER_PACKET_HEADER */
+        USBPcapBufferWriteUnsafe(pRootData,
+                                 (PVOID) header,
+                                 (UINT32) header->headerLen);
+
+        if (header->dataLength > 0)
+        {
+            /* Write data */
+            USBPcapBufferWriteUnsafe(pRootData,
+                                     buffer,
+                                     header->dataLength);
+        }
+    }
+    KeReleaseSpinLock(&pRootData->bufferLock, irql);
+
+    if (NT_SUCCESS(status))
+    {
+        pIrp = IoCsqRemoveNextIrp(&pControlExt->context.control.ioCsq,
+                                  NULL);
+        if (pIrp != NULL)
+        {
+            UINT32                 bytes;
+            PIO_STACK_LOCATION     pStack = NULL;
+
+            pStack = IoGetCurrentIrpStackLocation(pIrp);
+
+            KeAcquireSpinLock(&pRootData->bufferLock, &irql);
+            bytes = USBPcapBufferRead(pRootData,
+                                      pIrp->AssociatedIrp.SystemBuffer,
+                                      pStack->Parameters.Read.Length);
+            KeReleaseSpinLock(&pRootData->bufferLock, irql);
+
+            pIrp->IoStatus.Status = STATUS_SUCCESS;
+            pIrp->IoStatus.Information = (ULONG_PTR) bytes;
+            IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+        }
+    }
+
+    return status;
 }
