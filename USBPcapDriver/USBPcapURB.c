@@ -445,40 +445,108 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
         case URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT:
         case URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE:
         {
-            struct _URB_CONTROL_DESCRIPTOR_REQUEST *request;
+            struct _URB_CONTROL_TRANSFER             wrapTransfer;
+            struct _URB_CONTROL_DESCRIPTOR_REQUEST*  request;
+            USBPCAP_BUFFER_CONTROL_HEADER            packetHeader;
 
             request = (struct _URB_CONTROL_DESCRIPTOR_REQUEST*)pUrb;
 
-            DkDbgVal("URB_CONTROL_DESCRIPTOR_REQUEST", header->Function);
+            DkDbgVal("URB_FUNCTION_XXX_DESCRIPTOR", header->Function);
 
-            DkDbgVal("", request->TransferBufferLength);
-            DkDbgVal("", request->TransferBuffer);
-            DkDbgVal("", request->TransferBufferMDL);
-            switch (request->DescriptorType)
+            /* Set up wrapTransfer */
+            wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
+            if (header->Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE)
             {
-                case USB_DEVICE_DESCRIPTOR_TYPE:
-                    DkDbgVal("USB_DEVICE_DESCRIPTOR_TYPE",
-                             request->DescriptorType);
-                    break;
-                case USB_CONFIGURATION_DESCRIPTOR_TYPE:
-                    DkDbgVal("USB_CONFIGURATION_DESCRIPTOR_TYPE",
-                             request->DescriptorType);
-                    break;
-                case USB_STRING_DESCRIPTOR_TYPE:
-                    DkDbgVal("USB_STRING_DESCRIPTOR_TYPE",
-                             request->DescriptorType);
-                    break;
-                default:
-                    break;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Device (0)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x80;
+                /* 0x06 - GET_DESCRIPTOR */
+                wrapTransfer.SetupPacket[1] = 0x06;
             }
-            DkDbgVal("", request->LanguageId);
+            else if (header->Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_ENDPOINT)
+            {
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Endpoint (2)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x82;
+                /* 0x06 - GET_DESCRIPTOR */
+                wrapTransfer.SetupPacket[1] = 0x06;
+            }
+            else if (header->Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_INTERFACE)
+            {
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Interface (1)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x81;
+                /* 0x06 - GET_DESCRIPTOR */
+                wrapTransfer.SetupPacket[1] = 0x06;
+            }
+            else if (header->Function == URB_FUNCTION_SET_DESCRIPTOR_TO_DEVICE)
+            {
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+                /* D7: Data from Host to Device (0)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Device (0)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x00;
+                /* 0x07 - SET_DESCRIPTOR */
+                wrapTransfer.SetupPacket[1] = 0x07;
+            }
+            else if (header->Function == URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT)
+            {
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+                /* D7: Data from Host to Device (0)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Endpoint (2)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x02;
+                /* 0x07 - SET_DESCRIPTOR */
+                wrapTransfer.SetupPacket[1] = 0x07;
+            }
+            else if (header->Function == URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE)
+            {
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+                /* D7: Data from Host to Device (0)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Interface (1)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x01;
+                /* 0x07 - SET_DESCRIPTOR */
+                wrapTransfer.SetupPacket[1] = 0x07;
+            }
+            else
+            {
+                DkDbgVal("Invalid function", header->Function);
+                break;
+            }
+            wrapTransfer.SetupPacket[2] = request->Index;
+            wrapTransfer.SetupPacket[3] = request->DescriptorType;
+            if (request->DescriptorType == USB_STRING_DESCRIPTOR_TYPE)
+            {
+                wrapTransfer.SetupPacket[4] = (request->LanguageId & 0x00FF);
+                wrapTransfer.SetupPacket[5] = (request->LanguageId & 0xFF00) >> 8;
+            }
+            else
+            {
+                wrapTransfer.SetupPacket[4] = 0;
+                wrapTransfer.SetupPacket[5] = 0;
+            }
+            wrapTransfer.SetupPacket[6] = (request->TransferBufferLength & 0x00FF);
+            wrapTransfer.SetupPacket[7] = (request->TransferBufferLength & 0xFF00) >> 8;
 
-            if (request->TransferBuffer != NULL)
-            {
-                USBPcapPrintChars("Transfer Buffer",
-                                  request->TransferBuffer,
-                                  request->TransferBufferLength);
-            }
+            wrapTransfer.TransferBufferLength = request->TransferBufferLength;
+            wrapTransfer.TransferBuffer = request->TransferBuffer;
+            wrapTransfer.TransferBufferMDL = request->TransferBufferMDL;
+
+            USBPcapAnalyzeControlTransfer(&wrapTransfer, header,
+                                          pDeviceData, pIrp, post);
 
             break;
         }
