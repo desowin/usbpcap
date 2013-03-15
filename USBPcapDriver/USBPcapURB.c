@@ -222,9 +222,12 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
     struct _URB_HEADER     *header;
 
     ASSERT(pUrb != NULL);
+    ASSERT(pDeviceData != NULL);
+    ASSERT(pDeviceData->pRootData != NULL);
 
     header = (struct _URB_HEADER*)pUrb;
 
+    /* Following URBs are always analyzed */
     switch (header->Function)
     {
         case URB_FUNCTION_SELECT_CONFIGURATION:
@@ -253,6 +256,31 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             USBPcapParseInterfaceInformation(pDeviceData,
                                              &pSelectConfiguration->Interface,
                                              interfaces_len);
+
+            /* Store the configuration information for later use */
+            if (pDeviceData->descriptor != NULL)
+            {
+                ExFreePool((PVOID)pDeviceData->descriptor);
+            }
+
+            if (pSelectConfiguration->ConfigurationDescriptor != NULL)
+            {
+                SIZE_T descSize = pSelectConfiguration->ConfigurationDescriptor->wTotalLength;
+
+                pDeviceData->descriptor =
+                    ExAllocatePoolWithTag(NonPagedPool,
+                                          descSize,
+                                          (ULONG)'CSED');
+
+                RtlCopyMemory(pDeviceData->descriptor,
+                              pSelectConfiguration->ConfigurationDescriptor,
+                              (SIZE_T)descSize);
+            }
+            else
+            {
+                pDeviceData->descriptor = NULL;
+            }
+
             break;
         }
 
@@ -282,6 +310,106 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             USBPcapParseInterfaceInformation(pDeviceData,
                                              &pSelectInterface->Interface,
                                              interfaces_len);
+            break;
+        }
+
+        default:
+            break;
+    }
+
+    if (pDeviceData->pRootData->filtered == FALSE)
+    {
+        /* Do not log URBs when roothub is not being filtered */
+        return;
+    }
+
+    switch (header->Function)
+    {
+        case URB_FUNCTION_SELECT_CONFIGURATION:
+        {
+            struct _URB_SELECT_CONFIGURATION *pSelectConfiguration;
+            struct _URB_CONTROL_TRANSFER     wrapTransfer;
+
+            pSelectConfiguration = (struct _URB_SELECT_CONFIGURATION*)pUrb;
+
+            wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
+            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+            wrapTransfer.TransferBufferLength = 0;
+            wrapTransfer.TransferBuffer = NULL;
+            wrapTransfer.TransferBufferMDL = NULL;
+            wrapTransfer.SetupPacket[0] = 0x00; /* Host to Device, Standard */
+            wrapTransfer.SetupPacket[1] = 0x09; /* SET_CONFIGURATION */
+            if (pSelectConfiguration->ConfigurationDescriptor == NULL)
+            {
+                wrapTransfer.SetupPacket[2] = 0;
+            }
+            else
+            {
+                wrapTransfer.SetupPacket[2] = pSelectConfiguration->ConfigurationDescriptor->bConfigurationValue;
+            }
+            wrapTransfer.SetupPacket[3] = 0;
+            wrapTransfer.SetupPacket[4] = 0;
+            wrapTransfer.SetupPacket[5] = 0;
+            wrapTransfer.SetupPacket[6] = 0;
+            wrapTransfer.SetupPacket[7] = 0;
+
+            USBPcapAnalyzeControlTransfer(&wrapTransfer, header,
+                                          pDeviceData, pIrp, post);
+            break;
+        }
+
+        case URB_FUNCTION_SELECT_INTERFACE:
+        {
+            struct _URB_SELECT_INTERFACE *pSelectInterface;
+            struct _URB_CONTROL_TRANSFER wrapTransfer;
+            PUSBD_INTERFACE_INFORMATION  intInfo;
+            PUSB_INTERFACE_DESCRIPTOR    intDescriptor;
+
+            pSelectInterface = (struct _URB_SELECT_INTERFACE*)pUrb;
+
+            if (pDeviceData->descriptor == NULL)
+            {
+                /* Won't log this URB */
+                DkDbgStr("No configuration descriptor");
+                break;
+            }
+
+            /* Obtain the USB_INTERFACE_DESCRIPTOR */
+            intInfo = &pSelectInterface->Interface;
+
+            intDescriptor =
+                USBD_ParseConfigurationDescriptorEx(pDeviceData->descriptor,
+                                                    pDeviceData->descriptor,
+                                                    intInfo->InterfaceNumber,
+                                                    intInfo->AlternateSetting,
+                                                    -1,  /* Class */
+                                                    -1,  /* SubClass */
+                                                    -1); /* Protocol */
+
+            if (intDescriptor == NULL)
+            {
+                /* Interface descriptor not found */
+                DkDbgStr("Failed to get interface descriptor");
+                break;
+            }
+
+            wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
+            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+            wrapTransfer.TransferBufferLength = 0;
+            wrapTransfer.TransferBuffer = NULL;
+            wrapTransfer.TransferBufferMDL = NULL;
+            wrapTransfer.SetupPacket[0] = 0x00; /* Host to Device, Standard */
+            wrapTransfer.SetupPacket[1] = 0x0B; /* SET_INTERFACE */
+
+            wrapTransfer.SetupPacket[2] = intDescriptor->bAlternateSetting;
+            wrapTransfer.SetupPacket[3] = 0;
+            wrapTransfer.SetupPacket[4] = intDescriptor->bInterfaceNumber;
+            wrapTransfer.SetupPacket[5] = 0;
+            wrapTransfer.SetupPacket[6] = 0;
+            wrapTransfer.SetupPacket[7] = 0;
+
+            USBPcapAnalyzeControlTransfer(&wrapTransfer, header,
+                                          pDeviceData, pIrp, post);
             break;
         }
 

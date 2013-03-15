@@ -64,6 +64,9 @@ typedef struct _DEVICE_DATA
     PRTL_GENERIC_TABLE     endpointTable;
 
     PUSBPCAP_ROOTHUB_DATA  pRootData;
+
+    /* Active configuration descriptor */
+    PUSB_CONFIGURATION_DESCRIPTOR  descriptor;
 } USBPCAP_DEVICE_DATA, *PUSBPCAP_DEVICE_DATA;
 
 #define USBPCAP_MAGIC_SYSTEM   0xBAD51570

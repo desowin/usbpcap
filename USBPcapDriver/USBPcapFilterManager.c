@@ -54,6 +54,12 @@ static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt)
             pDeviceData->previousChildren = NULL;
         }
 
+        if (pDeviceData->descriptor != NULL)
+        {
+            ExFreePool((PVOID)pDeviceData->descriptor);
+            pDeviceData->descriptor = NULL;
+        }
+
         ExFreePool((PVOID)pDeviceData);
         pDevExt->context.usb.pDeviceData = NULL;
     }
@@ -141,6 +147,8 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
 
         KeInitializeSpinLock(&pDeviceData->endpointTableSpinLock);
         pDeviceData->endpointTable = USBPcapInitializeEndpointTable(NULL);
+
+        pDeviceData->descriptor = NULL;
     }
     else
     {
