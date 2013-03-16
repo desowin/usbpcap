@@ -679,6 +679,107 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             break;
         }
 
+        case URB_FUNCTION_VENDOR_DEVICE:
+        case URB_FUNCTION_VENDOR_INTERFACE:
+        case URB_FUNCTION_VENDOR_ENDPOINT:
+        case URB_FUNCTION_VENDOR_OTHER:
+        case URB_FUNCTION_CLASS_DEVICE:
+        case URB_FUNCTION_CLASS_INTERFACE:
+        case URB_FUNCTION_CLASS_ENDPOINT:
+        case URB_FUNCTION_CLASS_OTHER:
+        {
+            struct _URB_CONTROL_TRANSFER                  wrapTransfer;
+            struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST*  request;
+
+            request = (struct _URB_CONTROL_VENDOR_OR_CLASS_REQUEST*)pUrb;
+
+            DkDbgVal("URB_FUNCTION_VENDOR_XXX/URB_FUNCTION_CLASS_XXX",
+                     header->Function);
+
+            wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
+            wrapTransfer.TransferFlags = request->TransferFlags;
+            wrapTransfer.TransferBufferLength = request->TransferBufferLength;
+            wrapTransfer.TransferBuffer = request->TransferBuffer;
+            wrapTransfer.TransferBufferMDL = request->TransferBufferMDL;
+
+            /* Set up D6-D0 of Request Type based on Function
+             * D7 (Data Stage direction) will be set later
+             */
+            switch (header->Function)
+            {
+                case URB_FUNCTION_VENDOR_DEVICE:
+                    /* D4-D0: Device (0)
+                     * D6-D5: Vendor (2)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x40;
+                    break;
+                case URB_FUNCTION_VENDOR_INTERFACE:
+                    /* D4-D0: Interface (1)
+                     * D6-D5: Vendor (2)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x41;
+                    break;
+                case URB_FUNCTION_VENDOR_ENDPOINT:
+                    /* D4-D0: Endpoint (2)
+                     * D6-D5: Vendor (2)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x42;
+                    break;
+                case URB_FUNCTION_VENDOR_OTHER:
+                    /* D4-D0: Other (3)
+                     * D6-D5: Vendor (2)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x43;
+                    break;
+                case URB_FUNCTION_CLASS_DEVICE:
+                    /* D4-D0: Device (0)
+                     * D6-D5: Class (1)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x20;
+                    break;
+                case URB_FUNCTION_CLASS_INTERFACE:
+                    /* D4-D0: Interface (1)
+                     * D6-D5: Class (1)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x21;
+                    break;
+                case URB_FUNCTION_CLASS_ENDPOINT:
+                    /* D4-D0: Endpoint (2)
+                     * D6-D5: Class (1)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x22;
+                    break;
+                case URB_FUNCTION_CLASS_OTHER:
+                    /* D4-D0: Other (3)
+                     * D6-D5: Class (1)
+                     */
+                    wrapTransfer.SetupPacket[0] = 0x23;
+                    break;
+                default:
+                    DkDbgVal("Invalid function", header->Function);
+                    break;
+            }
+
+            if (request->TransferFlags & USBD_TRANSFER_DIRECTION_IN)
+            {
+                /* Set D7: Request data from device */
+                wrapTransfer.SetupPacket[0] |= 0x80;
+            }
+
+            wrapTransfer.SetupPacket[1] = request->Request;
+            wrapTransfer.SetupPacket[2] = (request->Value & 0x00FF);
+            wrapTransfer.SetupPacket[3] = (request->Value & 0xFF00) >> 8;
+            wrapTransfer.SetupPacket[4] = (request->Index & 0x00FF);
+            wrapTransfer.SetupPacket[5] = (request->Index & 0xFF00) >> 8;
+            wrapTransfer.SetupPacket[6] = (request->TransferBufferLength & 0x00FF);
+            wrapTransfer.SetupPacket[7] = (request->TransferBufferLength & 0xFF00) >> 8;
+
+            USBPcapAnalyzeControlTransfer(&wrapTransfer, header,
+                                          pDeviceData, pIrp, post);
+            break;
+        }
+
+
         default:
             DkDbgVal("Unknown URB type", header->Function);
     }
