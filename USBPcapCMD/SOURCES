@@ -1,0 +1,21 @@
+TARGETNAME = USBPcapCMD
+TARGETTYPE = PROGRAM
+
+_NT_TARGET_VERSION = $(_NT_TARGET_VERSION_WINXP)
+
+USE_MSVCRT = 1
+
+UMTYPE = console
+UMBASE = 0x01000000
+
+INCLUDES = $(DDK_INC_PATH);..\USBPcapDriver\include
+
+TARGETLIBS = $(SDK_LIB_PATH)\hid.lib \
+             $(SDK_LIB_PATH)\setupapi.lib \
+             $(SDK_LIB_PATH)\comdlg32.lib \
+             $(DDK_LIB_PATH)\advapi32.lib \
+             $(DDK_LIB_PATH)\Shlwapi.lib
+
+SOURCES = cmd.c \
+          filters.c \
+          thread.c
