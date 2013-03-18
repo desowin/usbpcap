@@ -59,6 +59,36 @@ typedef struct
     UCHAR                         stage;
 } USBPCAP_BUFFER_CONTROL_HEADER, *PUSBPCAP_BUFFER_CONTROL_HEADER;
 
+/* Note about isochronous packets:
+ *   packet[x].length, packet[x].status and errorCount are only relevant
+ *   when USBPCAP_INFO_PDO_TO_FDO is set
+ *
+ *   packet[x].length is not used for isochronous OUT transfers.
+ *
+ * Buffer data is attached to:
+ *   * for isochronous OUT transactions (write to device)
+ *       Requests (USBPCAP_INFO_PDO_TO_FDO is not set)
+ *   * for isochronous IN transactions (read from device)
+ *       Responses (USBPCAP_INFO_PDO_TO_FDO is set)
+ */
+#pragma pack(1)
+typedef struct
+{
+    ULONG        offset;
+    ULONG        length;
+    USBD_STATUS  status;
+} USBPCAP_BUFFER_ISO_PACKET, *PUSBPCAP_BUFFER_ISO_PACKET;
+
+#pragma pack(1)
+typedef struct
+{
+    USBPCAP_BUFFER_PACKET_HEADER  header;
+    ULONG                         startFrame;
+    ULONG                         numberOfPackets;
+    ULONG                         errorCount;
+    USBPCAP_BUFFER_ISO_PACKET     packet[1];
+} USBPCAP_BUFFER_ISOCH_HEADER, *PUSBPCAP_BUFFER_ISOCH_HEADER;
+
 NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
                             UINT32 bytes);
 

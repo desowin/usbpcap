@@ -439,7 +439,6 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
         {
             struct _URB_CONTROL_TRANSFER     wrapTransfer;
             struct _URB_CONTROL_TRANSFER_EX* transfer;
-            USBPCAP_BUFFER_CONTROL_HEADER    packetHeader;
 
             transfer = (struct _URB_CONTROL_TRANSFER_EX*)pUrb;
 
@@ -555,7 +554,14 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
 
         case URB_FUNCTION_ISOCH_TRANSFER:
         {
-            struct _URB_ISOCH_TRANSFER *transfer;
+            struct _URB_ISOCH_TRANSFER    *transfer;
+            USBPCAP_ENDPOINT_INFO         info;
+            BOOLEAN                       epFound;
+            PUSBPCAP_BUFFER_ISOCH_HEADER  packetHeader;
+            PVOID                         transferBuffer;
+            BOOLEAN                       attachData;
+            USHORT                        headerLen;
+            ULONG                         i;
 
             transfer = (struct _URB_ISOCH_TRANSFER*)pUrb;
 
@@ -563,6 +569,117 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             DkDbgVal("", transfer->PipeHandle);
             DkDbgVal("", transfer->TransferFlags);
             DkDbgVal("", transfer->NumberOfPackets);
+
+            /* Handle transfers up to maximum of 1024 packets */
+            if (transfer->NumberOfPackets > 1024)
+            {
+                DkDbgVal("Too many packets for isochronous transfer",
+                         transfer->NumberOfPackets);
+                break;
+            }
+
+            /* headerLen will fit on 16 bits for every allowed value of
+             * NumberOfPackets */
+            headerLen = (USHORT)sizeof(USBPCAP_BUFFER_ISOCH_HEADER) +
+                        (USHORT)(sizeof(USBPCAP_BUFFER_ISO_PACKET) *
+                                 (transfer->NumberOfPackets - 1));
+
+            packetHeader = ExAllocatePoolWithTag(NonPagedPool,
+                                                 (SIZE_T)headerLen,
+                                                 ' RDH');
+
+            if (packetHeader == NULL)
+            {
+                DkDbgStr("Insufficient resources for isochronous transfer");
+                break;
+            }
+
+            packetHeader->header.headerLen = headerLen;
+            packetHeader->header.irpId     = (UINT64) pIrp;
+            packetHeader->header.status    = header->Status;
+            packetHeader->header.function  = header->Function;
+            packetHeader->header.info      = 0;
+            if (post == TRUE)
+            {
+                packetHeader->header.info |= USBPCAP_INFO_PDO_TO_FDO;
+            }
+
+            packetHeader->header.bus       = pDeviceData->pRootData->busId;
+
+            epFound = USBPcapRetrieveEndpointInfo(pDeviceData,
+                                                  transfer->PipeHandle,
+                                                  &info);
+            if (epFound == TRUE)
+            {
+                packetHeader->header.device = info.deviceAddress;
+                packetHeader->header.endpoint = info.endpointAddress;
+            }
+            else
+            {
+                packetHeader->header.device = 0xFFFF;
+                packetHeader->header.endpoint = 0xFF;
+            }
+            packetHeader->header.transfer = USBPCAP_TRANSFER_ISOCHRONOUS;
+
+            if (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN)
+            {
+                if (post == TRUE)
+                {
+                    /* Read from device, return from controller */
+                    attachData = TRUE;
+                }
+                else
+                {
+                    /* Read from device, on its way to controller */
+                    attachData = FALSE;
+                }
+            }
+            else
+            {
+                if (post == FALSE)
+                {
+                    /* Write to device, on its way to controller */
+                    attachData = TRUE;
+                }
+                else
+                {
+                    /* Write to device, return from controller */
+                    attachData = FALSE;
+                }
+            }
+
+            if (attachData == FALSE)
+            {
+                packetHeader->header.dataLength = 0;
+                transferBuffer = NULL;
+            }
+            else
+            {
+                packetHeader->header.dataLength = (UINT32)transfer->TransferBufferLength;
+
+                transferBuffer =
+                    USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
+                                               transfer->TransferBuffer,
+                                               transfer->TransferBufferMDL);
+
+            }
+
+            packetHeader->startFrame      = transfer->StartFrame;
+            packetHeader->numberOfPackets = transfer->NumberOfPackets;
+            packetHeader->errorCount      = transfer->ErrorCount;
+
+            for (i = 0; i < transfer->NumberOfPackets; i++)
+            {
+                packetHeader->packet[i].offset = transfer->IsoPacket[i].Offset;
+                packetHeader->packet[i].length = transfer->IsoPacket[i].Length;
+                packetHeader->packet[i].status = transfer->IsoPacket[i].Status;
+            }
+
+            USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                     (PUSBPCAP_BUFFER_PACKET_HEADER)packetHeader,
+                                     transferBuffer);
+
+            ExFreePool((PVOID)packetHeader);
             break;
         }
 
@@ -575,7 +692,6 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
         {
             struct _URB_CONTROL_TRANSFER             wrapTransfer;
             struct _URB_CONTROL_DESCRIPTOR_REQUEST*  request;
-            USBPCAP_BUFFER_CONTROL_HEADER            packetHeader;
 
             request = (struct _URB_CONTROL_DESCRIPTOR_REQUEST*)pUrb;
 
