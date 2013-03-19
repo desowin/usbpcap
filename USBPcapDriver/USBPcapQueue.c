@@ -12,8 +12,7 @@ VOID DkCsqInsertIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
         return;
     }
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
-           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     InsertTailList(&pDevExt->context.control.lePendIrp,
                    &pIrp->Tail.Overlay.ListEntry);
@@ -42,8 +41,7 @@ PIRP DkCsqPeekNextIrp(__in PIO_CSQ pCsq, __in PIRP pIrp, __in PVOID pCtx)
         return NULL;
     }
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
-           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     pHeadList = &pDevExt->context.control.lePendIrp;
 
@@ -87,8 +85,7 @@ VOID DkCsqAcquireLock(__in PIO_CSQ pCsq, __out __drv_out_deref(__drv_savesIRQL) 
     pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
                                 context.control.ioCsq);
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
-           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     KeAcquireSpinLock(&pDevExt->context.control.csqSpinLock, pKIrql);
 }
@@ -101,8 +98,7 @@ VOID DkCsqReleaseLock(__in PIO_CSQ pCsq, __in __drv_in(__drv_restoresIRQL) KIRQL
     pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
                                 context.control.ioCsq);
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
-           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     KeReleaseSpinLock(&pDevExt->context.control.csqSpinLock, kIrql);
 }
@@ -124,8 +120,7 @@ VOID DkCsqCleanUpQueue(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM ||
-           pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
@@ -145,118 +140,3 @@ VOID DkCsqCleanUpQueue(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     }
 }
 
-static PDKQUE_DAT  pHead;
-static PDKQUE_DAT  pTail;
-static KSPIN_LOCK  kSLock;
-static LONG        Counter;
-
-VOID DkQueInitialize()
-{
-    pHead = pTail = NULL;
-    Counter = 0;
-    KeInitializeSpinLock(&kSLock);
-}
-
-BOOLEAN DkQueAdd(CONST PWCHAR pStrFuncName, ULONG ulFuncNameLen, PUCHAR pDat, ULONG ulDatLen, USHORT ushIsOut)
-{
-    PDKQUE_DAT  pNew = NULL;
-    KIRQL       kIrql;
-
-    if ((pStrFuncName == NULL) || (ulFuncNameLen <= 0))
-    {
-        return FALSE;
-    }
-
-    KeAcquireSpinLock(&kSLock, &kIrql);
-
-    if (Counter > DKQUE_SZ)
-    {
-        KeReleaseSpinLock(&kSLock, kIrql);
-        KdPrint(("%s: Error queue too long! (Max. queue: %d)", __FUNCTION__, DKQUE_SZ));
-        return FALSE;
-    }
-
-    pNew = (PDKQUE_DAT) ExAllocatePoolWithTag(NonPagedPool, sizeof(DKQUE_DAT), DKQUE_MTAG);
-    if (pNew == NULL)
-    {
-        KeReleaseSpinLock(&kSLock, kIrql);
-        KdPrint(("%s: Error allocating buffer!", __FUNCTION__));
-        return FALSE;
-    }
-
-    RtlFillMemory(pNew, sizeof(DKQUE_DAT), '\0');
-
-    pNew->pNext = NULL;
-    if (ulFuncNameLen > 0)
-    {
-        RtlCopyMemory(pNew->Dat.StrFuncName, pStrFuncName, ulFuncNameLen);
-    }
-    pNew->Dat.FuncNameLen = ulFuncNameLen;
-    if (ulDatLen > 0)
-    {
-        RtlCopyMemory(pNew->Dat.Data, pDat, ulDatLen);
-    }
-    pNew->Dat.IsOut = ushIsOut;
-    pNew->Dat.DataLen = ulDatLen;
-
-    if (pHead == NULL)
-    {
-        pHead = pNew;
-        pTail = pNew;
-    }
-    else
-    {
-        pTail->pNext = pNew;
-        pTail = pNew;
-    }
-    Counter++;
-
-    KeReleaseSpinLock(&kSLock, kIrql);
-
-    return TRUE;
-}
-
-PDKQUE_DAT DkQueGet()
-{
-    PDKQUE_DAT  pRet = NULL;
-    KIRQL       kIrql;
-    LONG        lCnt = 0;
-
-    KeAcquireSpinLock(&kSLock, &kIrql);
-    pRet = pHead;
-    if (pRet != NULL)
-    {
-        pHead = pRet->pNext;
-        Counter--;
-    }
-    else
-    {
-        pTail = pHead;
-    }
-    KeReleaseSpinLock(&kSLock, kIrql);
-
-    return pRet;
-}
-
-VOID DkQueDel(PDKQUE_DAT pItem)
-{
-    if (pItem == NULL)
-        return;
-
-    ExFreePoolWithTag((PVOID)pItem, DKQUE_MTAG);
-}
-
-VOID DkQueCleanUpData()
-{
-    PDKQUE_DAT  pDat = NULL;
-
-    for (;;)
-    {
-        pDat = DkQueGet();
-        if (pDat == NULL)
-            break;
-
-        DkQueDel(pDat);
-        pDat = NULL;
-    }
-}

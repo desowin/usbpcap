@@ -41,7 +41,6 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
 
             case IRP_MJ_CLEANUP:
-                DkQueCleanUpData();
                 DkCsqCleanUpQueue(pDevObj, pIrp);
                 break;
 
@@ -97,63 +96,6 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         // target devices
         IoSkipCurrentIrpStackLocation(pIrp);
         ntStat = IoCallDriver(pNextDevObj, pIrp);
-    }
-    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM)
-    {
-        // Handling Read/Write for this object
-        switch (pStack->MajorFunction)
-        {
-            case IRP_MJ_READ:
-                if (pStack->Parameters.Read.Length != sizeof(DKPORT_DAT))
-                {
-                    ntStat = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-                else
-                {
-                    // Get data from data queue, if there is no data we put
-                    // this IRP to Cancel-Safe queue and return status pending
-                    // otherwise complete this IRP then return SUCCESS
-                    pQueDat = DkQueGet();
-
-                    if (pQueDat == NULL)
-                    {
-                        IoCsqInsertIrp(&pDevExt->context.control.ioCsq,
-                                       pIrp, NULL);
-                        IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
-                        return STATUS_PENDING;
-                    }
-                    else
-                    {
-                        pDat = (PDKPORT_DAT) pIrp->AssociatedIrp.SystemBuffer;
-
-                        RtlCopyMemory(pDat, &pQueDat->Dat, sizeof(DKPORT_DAT));
-
-                        DkQueDel(pQueDat);
-
-                        IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
-
-                        DkCompleteRequest(pIrp, ntStat, (ULONG_PTR) sizeof(DKPORT_DAT));
-
-                        return ntStat;
-                    }
-                }
-                break;
-
-
-            case IRP_MJ_WRITE:
-                // This object does not support this so just return STATUS_NOT_SUPPORTED
-                ntStat = STATUS_NOT_SUPPORTED;
-                break;
-
-
-            default:
-                DkDbgVal("Unknown IRP Major function", pStack->MajorFunction);
-                ntStat = STATUS_INVALID_DEVICE_REQUEST;
-                break;
-        }
-
-        DkCompleteRequest(pIrp, ntStat, 0);
     }
     else if (pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL)
     {

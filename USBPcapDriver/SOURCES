@@ -1,4 +1,4 @@
-TARGETNAME = USBPcapDriver
+TARGETNAME = USBPcap
 
 TARGETPATH = ..\DriverBin
 
@@ -6,8 +6,8 @@ TARGETTYPE = DRIVER
 
 DRIVERTYPE = WDM
 
-INF_NAME=USBPcapDriver
-USBPCAP_VERSION=0.0.0.1
+INF_NAME=USBPcap
+USBPCAP_VERSION=1.0.0.1
 NTTARGETFILES=$(TARGETPATH)\%CPU%\$(INF_NAME).inf
 
 TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib \
@@ -30,6 +30,5 @@ SOURCES = USBPcap.rc               \
           USBPcapRootHubControl.c  \
           USBPcapQueue.c           \
           USBPcapTables.c          \
-          USBPcapURB.c             \
-          USBPcapUSBFuncs.c
+          USBPcapURB.c
 

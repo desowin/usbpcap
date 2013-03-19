@@ -69,7 +69,6 @@ typedef struct _DEVICE_DATA
     PUSB_CONFIGURATION_DESCRIPTOR  descriptor;
 } USBPCAP_DEVICE_DATA, *PUSBPCAP_DEVICE_DATA;
 
-#define USBPCAP_MAGIC_SYSTEM   0xBAD51570
 #define USBPCAP_MAGIC_CONTROL  0xBAD51571
 #define USBPCAP_MAGIC_ROOTHUB  0xBAD51572
 #define USBPCAP_MAGIC_DEVICE   0xBAD51573
@@ -112,7 +111,7 @@ typedef struct DEVICE_EXTENSION_Tag {
 //
 DRIVER_INITIALIZE  DriverEntry;
 DRIVER_UNLOAD      DkUnload;
-DRIVER_ADD_DEVICE  DkAddDevice;
+DRIVER_ADD_DEVICE  AddDevice;
 
 ////////////////////////////////////////////////////////////
 // Some "standard" dispatch routines, used by this driver
@@ -184,13 +183,6 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
 
 
 ///////////////////////////////////////////////////////////////////////////
-// Create and attach hub filter objects routine
-//
-NTSTATUS DkCreateAndAttachHubFilt(PDEVICE_EXTENSION pDevExt, PIRP pIrp,
-                                  PDEVICE_OBJECT *pFilter);
-
-
-///////////////////////////////////////////////////////////////////////////
 // Detach and delete hub filter objects routine
 //
 VOID DkDetachAndDeleteHubFilt(PDEVICE_EXTENSION pDevExt);
@@ -212,18 +204,5 @@ VOID DkDetachAndDeleteTgt(PDEVICE_EXTENSION pDevExt);
 // Get USB Hub device name
 //
 NTSTATUS DkGetHubDevName(PIO_STACK_LOCATION pStack, PIRP pIrp, PULONG pUlRes);
-
-
-///////////////////////////////////////////////////////////////////////////
-// Function to complete pended IRP, if there is none then put data to data queue
-//
-NTSTATUS DkTgtCompletePendedIrp(PWCH szFuncName, ULONG ulFuncNameByteLen, PUCHAR pDat, ULONG ulDatByteLen, USHORT ushIsOut);
-
-
-///////////////////////////////////////////////////////////////////////////
-// View USB function, to get USB function string from USB function code
-//
-PCHAR DkDbgGetUSBFunc(USHORT usFuncCode);
-PWCHAR DkDbgGetUSBFuncW(USHORT usFuncCode);
 
 #endif /* USBPCAP_MAIN_H */

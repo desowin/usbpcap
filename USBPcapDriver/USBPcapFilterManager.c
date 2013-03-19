@@ -75,7 +75,7 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
     NTSTATUS              status = STATUS_SUCCESS;
     BOOLEAN               allocRoothubData;
 
-    allocRoothubData = (pParentDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
+    allocRoothubData = (pParentDevExt == NULL);
 
     /* Allocate USBPCAP_DEVICE_DATA */
     pDeviceData = ExAllocatePoolWithTag(NonPagedPool,
@@ -161,7 +161,7 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
     {
         USBPcapFreeDeviceData(pDevExt);
     }
-    else
+    else if (allocRoothubData == FALSE)
     {
         /* Set up parent and target objects in USBPCAP_DEVICE_DATA */
         pDeviceData->pParentFlt = pParentDevExt->pThisDevObj;
@@ -171,52 +171,52 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
     return status;
 }
 
+static ULONG GetDeviceTypeToUse(PDEVICE_OBJECT pdo)
+{
+    PDEVICE_OBJECT ldo = IoGetAttachedDeviceReference(pdo);
+    ULONG devtype = FILE_DEVICE_UNKNOWN;
+
+    if (ldo != NULL)
+    {
+        devtype = ldo->DeviceType;
+        ObDereferenceObject(ldo);
+    }
+
+    return devtype;
+}
+
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
 //
 // Filter object is set to new filter device on success
-NTSTATUS DkCreateAndAttachHubFilt(IN PDEVICE_EXTENSION pParentDevExt,
-                                  IN PIRP pIrp,
-                                  OUT PDEVICE_OBJECT *pFilter)
+NTSTATUS AddDevice(IN PDRIVER_OBJECT pDrvObj,
+                   IN PDEVICE_OBJECT pTgtDevObj)
 {
     NTSTATUS          ntStat = STATUS_SUCCESS;
     UNICODE_STRING    usTgtName;
-    PFILE_OBJECT      pFlObj = NULL;
     PDEVICE_OBJECT    pHubFilter = NULL;
-    PDEVICE_OBJECT    pTgtDevObj = NULL;
     PDEVICE_EXTENSION pDevExt = NULL;
 
-
-    // 1. Get device object pointer to attach to
-    RtlInitUnicodeString(&usTgtName, (PWSTR) pIrp->AssociatedIrp.SystemBuffer);
-    ntStat = IoGetDeviceObjectPointer(&usTgtName, GENERIC_ALL, &pFlObj, &pTgtDevObj);
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error get USB Hub device object!", ntStat);
-        return ntStat;
-    }
-
     // 2. Create filter object
-    ntStat = IoCreateDevice(pParentDevExt->pDrvObj,
+    ntStat = IoCreateDevice(pDrvObj,
                             sizeof(DEVICE_EXTENSION), NULL,
-                            pTgtDevObj->DeviceType, 0, FALSE, &pHubFilter);
+                            GetDeviceTypeToUse(pTgtDevObj), 0,
+                            FALSE, &pHubFilter);
     if (!NT_SUCCESS(ntStat))
     {
         DkDbgVal("Error create Hub Filter!", ntStat);
-        ObDereferenceObject(pFlObj);
         goto EndFunc;
     }
-    ObDereferenceObject(pFlObj);
 
     pDevExt = (PDEVICE_EXTENSION) pHubFilter->DeviceExtension;
     pDevExt->deviceMagic = USBPCAP_MAGIC_ROOTHUB;
     pDevExt->pThisDevObj = pHubFilter;
-    pDevExt->pDrvObj = pParentDevExt->pDrvObj;
-    pDevExt->parentRemoveLock = &pParentDevExt->removeLock;
+    pDevExt->pDrvObj = pDrvObj;
+    pDevExt->parentRemoveLock = NULL;
 
     IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
 
-    ntStat = USBPcapAllocateDeviceData(pDevExt, pParentDevExt);
+    ntStat = USBPcapAllocateDeviceData(pDevExt, NULL);
     if (!NT_SUCCESS(ntStat))
     {
         goto EndFunc;
@@ -236,10 +236,6 @@ NTSTATUS DkCreateAndAttachHubFilt(IN PDEVICE_EXTENSION pParentDevExt,
         (pDevExt->pNextDevObj->Flags & (DO_BUFFERED_IO | DO_DIRECT_IO | DO_POWER_PAGABLE));
 
     pHubFilter->Flags &= ~DO_DEVICE_INITIALIZING;
-
-    *pFilter = pHubFilter;
-
-    IoAcquireRemoveLock(pDevExt->parentRemoveLock, NULL);
 
     if (NT_SUCCESS(ntStat))
     {

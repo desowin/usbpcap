@@ -2,88 +2,6 @@
 #include "USBPcapHelperFunctions.h"
 #include "USBPcapRootHubControl.h"
 
-//
-// External global variables defined in DkSysPort.c
-//
-extern UNICODE_STRING g_usDevName;
-extern UNICODE_STRING g_usLnkName;
-
-extern PDEVICE_OBJECT g_pThisDevObj;
-
-NTSTATUS DkAddDevice(PDRIVER_OBJECT pDrvObj, PDEVICE_OBJECT pPhysDevObj)
-{
-    NTSTATUS            ntStat = STATUS_SUCCESS;
-    PDEVICE_EXTENSION   pDevExt = NULL;
-    PDEVICE_OBJECT      pDeviceObject = NULL;
-
-    ntStat = IoCreateDevice(pDrvObj, sizeof(DEVICE_EXTENSION), &g_usDevName,
-        FILE_DEVICE_UNKNOWN, FILE_DEVICE_SECURE_OPEN, FALSE, &pDeviceObject);
-
-    g_pThisDevObj = pDeviceObject;
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error create device!", ntStat);
-        return ntStat;
-    }
-
-    pDevExt = (PDEVICE_EXTENSION) pDeviceObject->DeviceExtension;
-    pDevExt->deviceMagic = USBPCAP_MAGIC_SYSTEM;
-    pDevExt->pThisDevObj = pDeviceObject;
-    pDevExt->pDrvObj = pDrvObj;
-
-    IoInitializeRemoveLock(&pDevExt->removeLock, 0, 0, 0);
-
-    KeInitializeSpinLock(&pDevExt->context.control.csqSpinLock);
-    InitializeListHead(&pDevExt->context.control.lePendIrp);
-    ntStat = IoCsqInitialize(&pDevExt->context.control.ioCsq,
-        DkCsqInsertIrp, DkCsqRemoveIrp, DkCsqPeekNextIrp, DkCsqAcquireLock,
-        DkCsqReleaseLock, DkCsqCompleteCanceledIrp);
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error initialize Cancel-safe queue!", ntStat);
-        goto EndAddDev;
-    }
-
-    DkQueInitialize();
-
-    ntStat = IoCreateSymbolicLink(&g_usLnkName, &g_usDevName);
-    if (!NT_SUCCESS(ntStat))
-    {
-        DkDbgVal("Error create symbolic link!", ntStat);
-        goto EndAddDev;
-    }
-
-    pDevExt->pNextDevObj = NULL;
-    pDevExt->pNextDevObj = IoAttachDeviceToDeviceStack(pDeviceObject, pPhysDevObj);
-    if (pDevExt->pNextDevObj == NULL)
-    {
-        DkDbgStr("Error attach device!");
-        ntStat = STATUS_NO_SUCH_DEVICE;
-        goto EndAddDev;
-    }
-
-    pDeviceObject->Flags |= (DO_BUFFERED_IO | DO_POWER_PAGABLE);
-    pDeviceObject->Flags &= ~DO_DEVICE_INITIALIZING;
-
-
-EndAddDev:
-    if (!NT_SUCCESS(ntStat))
-    {
-        if (pDevExt->pNextDevObj)
-        {
-            IoDetachDevice(pDevExt->pNextDevObj);
-        }
-
-        if (pDeviceObject)
-        {
-            IoDeleteSymbolicLink(&g_usLnkName);
-            IoDeleteDevice(pDeviceObject);
-        }
-    }
-
-    return ntStat;
-}
-
 NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 {
     NTSTATUS             ntStat = STATUS_SUCCESS;
@@ -113,63 +31,6 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         DkDbgVal("Error acquire lock!", ntStat);
         DkCompleteRequest(pIrp, ntStat, 0);
         return ntStat;
-    }
-
-
-
-    switch (pStack->MinorFunction)
-    {
-        case IRP_MN_START_DEVICE:
-            DkDbgStr("IRP_MN_START_DEVICE");
-
-            ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
-
-            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
-
-            IoCompleteRequest(pIrp, IO_NO_INCREMENT);
-
-            return ntStat;
-
-
-
-        case IRP_MN_REMOVE_DEVICE:
-            DkDbgStr("IRP_MN_REMOVE_DEVICE");
-
-            IoSkipCurrentIrpStackLocation(pIrp);
-            ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
-
-            if (pDevExt->context.control.pRootHubObject != NULL)
-            {
-                PDEVICE_EXTENSION rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
-                PUSBPCAP_DEVICE_DATA pDeviceData = rootExt->context.usb.pDeviceData;
-
-                if (pDeviceData != NULL &&
-                    pDeviceData->pRootData != NULL &&
-                    pDeviceData->pRootData->controlDevice != NULL)
-                {
-                    USBPcapDeleteRootHubControlDevice(pDeviceData->pRootData->controlDevice);
-                }
-
-                IoAcquireRemoveLock(&rootExt->removeLock, (PVOID) pIrp);
-                IoReleaseRemoveLockAndWait(&rootExt->removeLock, (PVOID) pIrp);
-
-                DkDetachAndDeleteHubFilt(rootExt);
-                pDevExt->context.control.pRootHubObject = NULL;
-            }
-            IoReleaseRemoveLockAndWait(&pDevExt->removeLock, (PVOID) pIrp);
-
-            IoDeleteSymbolicLink(&g_usLnkName);
-            IoDetachDevice(pDevExt->pNextDevObj);
-            IoDeleteDevice(pDevObj);
-            g_pThisDevObj = NULL;
-
-            return ntStat;
-
-
-        default:
-            DkDbgVal("", pStack->MinorFunction);
-            break;
-
     }
 
     IoSkipCurrentIrpStackLocation(pIrp);
@@ -204,6 +65,28 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
 
             return ntStat;
 
+        case IRP_MN_REMOVE_DEVICE:
+        {
+            PUSBPCAP_DEVICE_DATA pDeviceData = pDevExt->context.usb.pDeviceData;
+            DkDbgStr("IRP_MN_REMOVE_DEVICE");
+
+            IoSkipCurrentIrpStackLocation(pIrp);
+            ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+
+            if (pDeviceData != NULL &&
+                pDeviceData->pRootData != NULL &&
+                pDeviceData->pRootData->controlDevice != NULL)
+            {
+                USBPcapDeleteRootHubControlDevice(pDeviceData->pRootData->controlDevice);
+            }
+
+            IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
+            IoReleaseRemoveLockAndWait(&pDevExt->removeLock, (PVOID) pIrp);
+
+            DkDetachAndDeleteHubFilt(pDevExt);
+
+            return ntStat;
+        }
 
         case IRP_MN_QUERY_DEVICE_RELATIONS:
             DkDbgStr("IRP_MN_QUERY_DEVICE_RELATIONS");

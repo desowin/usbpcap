@@ -6,7 +6,7 @@ cd %~dp0
 build -ceZg
 if exist build%BUILD_ALT_DIR%.err goto error
 
-SignTool sign /f certificates\USBPcapTestCert.pfx /t http://timestamp.verisign.com/scripts/timestamp.dll DriverBin\%CPU%\USBPcapDriver.sys
+SignTool sign /f certificates\USBPcapTestCert.pfx /t http://timestamp.verisign.com/scripts/timestamp.dll DriverBin\%CPU%\USBPcap.sys
 if errorlevel 1 goto error
 
 goto end

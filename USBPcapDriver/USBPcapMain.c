@@ -1,12 +1,5 @@
 #include "USBPcapMain.h"
 
-//
-// Declare some global variables
-//
-UNICODE_STRING        g_usDevName;
-UNICODE_STRING        g_usLnkName;
-PDEVICE_OBJECT        g_pThisDevObj;
-
 /* Control device ID, used when creating roothub control devices
  *
  * Although this is 32-bit value (ULONG) we use only lower 16 bits
@@ -22,7 +15,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
     DkDbgStr("3");
 
     pDrvObj->DriverUnload                = DkUnload;
-    pDrvObj->DriverExtension->AddDevice  = DkAddDevice;
+    pDrvObj->DriverExtension->AddDevice  = AddDevice;
 
     for (ucCnt = 0; ucCnt < IRP_MJ_MAXIMUM_FUNCTION; ucCnt++)
     {
@@ -43,9 +36,6 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
     pDrvObj->MajorFunction[IRP_MJ_PNP] = DkPnP;
 
     pDrvObj->MajorFunction[IRP_MJ_POWER]                    = DkPower;
-
-    RtlInitUnicodeString(&g_usDevName, DKPORT_DEVNAME_STR);
-    RtlInitUnicodeString(&g_usLnkName, DKPORT_DEVLINK_STR);
 
     g_controlId = (ULONG)0;
 
@@ -133,52 +123,3 @@ NTSTATUS DkGenCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
     return STATUS_MORE_PROCESSING_REQUIRED;
 }
 
-NTSTATUS DkTgtCompletePendedIrp(PWCH szFuncName, ULONG ulFuncNameByteLen, PUCHAR pDat, ULONG ulDatByteLen, USHORT ushIsOut)
-{
-    PDKPORT_DAT        pNewDat = NULL;
-    PIRP               pIrp = NULL;
-    PDEVICE_EXTENSION  pDevExt = NULL;
-
-    if (ulFuncNameByteLen > (DKPORT_STR_LEN * 2))
-    {
-        DkDbgStr("Error string too long!");
-        return STATUS_UNSUCCESSFUL;
-    }
-    if (ulDatByteLen > DKPORT_DAT_LEN)
-    {
-        DkDbgStr("Error data too big!");
-        return STATUS_UNSUCCESSFUL;
-    }
-
-    pDevExt = (PDEVICE_EXTENSION) g_pThisDevObj->DeviceExtension;
-
-    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_SYSTEM);
-
-    pIrp = IoCsqRemoveNextIrp(&pDevExt->context.control.ioCsq, NULL);
-    if (pIrp == NULL)
-    {
-        DkQueAdd(szFuncName, ulFuncNameByteLen, pDat, ulDatByteLen, ushIsOut);
-    }
-    else
-    {
-        pNewDat = (PDKPORT_DAT) pIrp->AssociatedIrp.SystemBuffer;
-        RtlFillMemory(pNewDat, sizeof(DKPORT_DAT), '\0');
-        pNewDat->FuncNameLen = ulFuncNameByteLen;
-        pNewDat->DataLen = ulDatByteLen;
-        pNewDat->IsOut = ushIsOut;
-        if (szFuncName != NULL)
-        {
-            RtlCopyMemory(pNewDat->StrFuncName, szFuncName, ulFuncNameByteLen);
-        }
-        if (pDat != NULL)
-        {
-            RtlCopyMemory(pNewDat->Data, pDat, ulDatByteLen);
-        }
-
-        pIrp->IoStatus.Status = STATUS_SUCCESS;
-        pIrp->IoStatus.Information = sizeof(DKPORT_DAT);
-        IoCompleteRequest(pIrp, IO_NO_INCREMENT);
-    }
-
-    return STATUS_SUCCESS;
-}
