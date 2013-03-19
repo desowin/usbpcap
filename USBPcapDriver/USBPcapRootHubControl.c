@@ -18,7 +18,7 @@
 #include "USBPcapRootHubControl.h"
 #include "Ntstrsafe.h"
 
-extern short volatile g_controlId;
+extern ULONG volatile g_controlId;
 
 #define NTNAME_PREFIX      L"\\Device\\USBPcap"
 #define SYMBOLIC_PREFIX    L"\\DosDevices\\USBPcap"
@@ -44,7 +44,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
     ASSERT(hubExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB);
 
     /* Acquire the control device ID */
-    id = (USHORT) InterlockedIncrement16(&g_controlId);
+    id = (USHORT) InterlockedIncrement(&g_controlId);
 
     ntDeviceName.Length = 0;
     ntDeviceName.MaximumLength = MAX_NTNAME_LEN;

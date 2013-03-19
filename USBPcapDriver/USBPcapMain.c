@@ -7,8 +7,13 @@ UNICODE_STRING        g_usDevName;
 UNICODE_STRING        g_usLnkName;
 PDEVICE_OBJECT        g_pThisDevObj;
 
-/* Control device ID, used when creating roothub control devices */
-short volatile g_controlId;
+/* Control device ID, used when creating roothub control devices
+ *
+ * Although this is 32-bit value (ULONG) we use only lower 16 bits
+ * The reason for that is lack of InterlockedIncrement16 when building
+ * for x86 processors
+ */
+ULONG volatile g_controlId;
 
 NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
 {
@@ -42,7 +47,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
     RtlInitUnicodeString(&g_usDevName, DKPORT_DEVNAME_STR);
     RtlInitUnicodeString(&g_usLnkName, DKPORT_DEVLINK_STR);
 
-    g_controlId = 0;
+    g_controlId = (ULONG)0;
 
     return STATUS_SUCCESS;
 }
