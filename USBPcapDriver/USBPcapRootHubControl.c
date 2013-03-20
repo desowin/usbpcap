@@ -35,7 +35,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
     UNICODE_STRING     ntDeviceName;
     UNICODE_STRING     symbolicLinkName;
     PDEVICE_OBJECT     controlDevice = NULL;
-    PDEVICE_EXTENSION  controlExt;
+    PDEVICE_EXTENSION  controlExt = NULL;
     NTSTATUS           status;
     USHORT             id;
     PWCHAR             ntNameBuffer[MAX_NTNAME_LEN];
@@ -126,7 +126,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
     }
 
 End:
-    if (!NT_SUCCESS(status))
+    if ((!NT_SUCCESS(status)) || (controlExt == NULL))
     {
         if (controlDevice != NULL)
         {

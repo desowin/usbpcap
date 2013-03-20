@@ -16,6 +16,17 @@ Build instructions:
     * To build for x86: replace 'x64' with 'x86'
     * To build for Windows XP: replace 'WIN7' with 'WXP'
 
+  Windows 8 Build instructions:
+  In order to compile for Windows 8, you need to have Visual Studio 2012
+  Professional or above and install Windows Driver Kit 8.
+  To create solution file use the following command from Visual Studio 2012
+  Command Prompt (while being chdired into usbpcap sources directory):
+  > Nmake2MsBuild dirs
+
+  This will create solution dirs.sln. You can build the driver from the
+  Visual Studio 2012 Command Prompt:
+  > MSBuild dirs.sln /p:Configuration="Win8 Debug"
+
 Installation:
   TESTSIGNING must be enabled in order to install this driver on 64 bit
   Windows. To do so, issue following command (as administrator):

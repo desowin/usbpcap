@@ -672,6 +672,8 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
 
     ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE);
 
+    hub = pDevExt->context.usb.pDeviceData->pNextParentFlt;
+
     /* 0 indicates that we didn't yet query the device port */
     if (pDevExt->context.usb.pDeviceData->parentPort == 0)
     {
@@ -681,8 +683,6 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
             DkDbgStr("Failed to get target device PDO!");
             return status;
         }
-
-        hub = pDevExt->context.usb.pDeviceData->pNextParentFlt;
 
         status = USBPcapGetTargetDevicePort(hub, devicePdo, &port);
         ObDereferenceObject((PVOID)devicePdo);
