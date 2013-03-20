@@ -1,0 +1,42 @@
+USBPcap - USB Packet capture for Windows
+
+There is no end-user release yet.
+Following informations are intended for developers and power users only.
+
+Directory overview:
+  USBPcapCMD - sample user space application
+  USBPcapDriver - filter driver used to capture data
+
+Build instructions:
+  Download and install Windows Driver Kit 7.1.0 from Microsoft
+    http://www.microsoft.com/en-us/download/details.aspx?id=11800
+
+  Adjust driver_build_win7_64bit.bat (first line of that file):
+    * To change to checked build: replace 'fre' with 'chk'
+    * To build for x86: replace 'x64' with 'x86'
+    * To build for Windows XP: replace 'WIN7' with 'WXP'
+
+Installation:
+  TESTSIGNING must be enabled in order to install this driver on 64 bit
+  Windows. To do so, issue following command (as administrator):
+    Bcdedit.exe -set TESTSIGNING ON
+  and reboot.
+
+  devcon.exe can be used to install the driver:
+  > devcon.exe install USBPcap.inf USB\ROOT_HUB
+  > devcon.exe install USBPcap.inf USB\ROOT_HUB20
+
+  devcon.exe is from WinDDK tools directory
+    for example: C:\WinDDK\7600.16385.1\tools\devcon\amd64\devcon.exe
+
+  After installing, reboot.
+
+Usage:
+  Currently there is no capture engine dll.
+  You can use the USBPcapCMD.exe to select the filter instance (there is one
+  instance per root hub) and specify the output pcap file name.
+
+Licensing:
+  USBPcapDriver is licensed under GPLv2 license.
+  USBPcapCMD is licensed under BSD 2-Clause license.
+
