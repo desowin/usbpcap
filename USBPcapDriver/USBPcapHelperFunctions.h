@@ -33,6 +33,8 @@ NTSTATUS USBPcapPrintUSBPChildrenInformation(PDEVICE_OBJECT hub);
 
 NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt);
 
+BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device);
+
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, USBPcapGetTargetDevicePdo)
 #pragma alloc_text (PAGE, USBPcapGetNumberOfPorts)
@@ -40,6 +42,7 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt);
 #pragma alloc_text (PAGE, USBPcapPrintUSBPChildrenInformation)
 #endif
 #pragma alloc_text (PAGE, USBPcapGetDeviceUSBInfo)
+#pragma alloc_text (PAGE, USBPcapIsDeviceRootHub)
 #endif
 
 #endif /* USBPCAP_HELPER_FUNCTIONS_H */

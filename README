@@ -33,12 +33,7 @@ Installation:
     Bcdedit.exe -set TESTSIGNING ON
   and reboot.
 
-  devcon.exe can be used to install the driver:
-  > devcon.exe install USBPcap.inf USB\ROOT_HUB
-  > devcon.exe install USBPcap.inf USB\ROOT_HUB20
-
-  devcon.exe is from WinDDK tools directory
-    for example: C:\WinDDK\7600.16385.1\tools\devcon\amd64\devcon.exe
+  Right click on the USBPcap.inf file and select Install.
 
   After installing, reboot.
 

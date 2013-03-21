@@ -717,3 +717,114 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
 
     return status;
 }
+
+#define REGSTR_VAL_MAX_HCID_LEN 1024
+#define MAX_HARDWARE_IDS 64
+
+#define MAXIMUM_HARDWARE_ID_LEN (REGSTR_VAL_MAX_HCID_LEN * MAX_HARDWARE_IDS)
+
+/*
+ * Checks if device is Root Hub
+ * In case of any error condition, it is assumed that device is not a root hub.
+ *
+ * Returns TRUE if device is root hub, FALSE otherwise.
+ */
+__drv_requiresIRQL(PASSIVE_LEVEL)
+BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
+{
+    NTSTATUS        status;
+    PDEVICE_OBJECT  pdo;
+    WCHAR           *hwid;
+    WCHAR           *hardwareIds[MAX_HARDWARE_IDS] = {NULL};
+    ULONG           length;
+    ULONG           i;
+    ULONG           id;
+    ULONG           start;
+    BOOLEAN         found = FALSE;
+
+    hwid = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool,
+                                         MAXIMUM_HARDWARE_ID_LEN,
+                                         'DIWH');
+
+    if (hwid == NULL)
+    {
+        DkDbgStr("Not enough resources!");
+        return FALSE;
+    }
+
+    RtlFillMemory(hwid, MAXIMUM_HARDWARE_ID_LEN, '\0');
+    status = USBPcapGetTargetDevicePdo(device, &pdo);
+
+    if (!NT_SUCCESS(status))
+    {
+        ExFreePool((PVOID)hwid);
+        DkDbgStr("Failed to get target device PDO!");
+        return FALSE;
+    }
+
+    status = IoGetDeviceProperty(pdo,
+                                 DevicePropertyHardwareID,
+                                 MAXIMUM_HARDWARE_ID_LEN,
+                                 hwid,
+                                 &length);
+
+    ObDereferenceObject((PVOID)pdo);
+
+    if (!NT_SUCCESS(status))
+    {
+        ExFreePool((PVOID)hwid);
+        DkDbgVal("IoGetDeviceProperty failed!", status);
+        return FALSE;
+    }
+
+    id = 0;
+    start = 0;
+    for (i = 0; i < (length/sizeof(WCHAR)); i++)
+    {
+        if (hwid[i] == L'\0')
+        {
+            if (start == i)
+            {
+                /* This is the end of hardware IDs */
+                break;
+            }
+            else
+            {
+                hardwareIds[id] = &hwid[start];
+                id++;
+                start = i+1;
+            }
+        }
+    }
+
+    while (id > 0)
+    {
+        id--;
+#if DBG
+        {
+            UNICODE_STRING str;
+            RtlInitUnicodeString(&str, hardwareIds[id]);
+
+            KdPrint(("Hardware ID: %wZ\n", &str));
+        }
+#endif
+
+        if (wcscmp(hardwareIds[id], L"USB\\ROOT_HUB") == 0)
+        {
+            DkDbgStr("Device is USB\\ROOT_HUB");
+            found = TRUE;
+            break;
+        }
+        else if (wcscmp(hardwareIds[id], L"USB\\ROOT_HUB20") == 0)
+        {
+            DkDbgStr("Device is USB\\ROOT_HUB20");
+            found = TRUE;
+            break;
+        }
+    }
+
+    ExFreePool((PVOID)hwid);
+
+    return found;
+}
+

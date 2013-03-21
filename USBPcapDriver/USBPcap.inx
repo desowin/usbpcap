@@ -1,7 +1,6 @@
 [Version]
 Signature           = "$WINDOWS NT$"
-Class               = USB
-ClassGuid           = {36FC9E60-C465-11CF-8056-444553540000}
+DriverPackageType   = ClassFilter
 Provider            = %PROVIDER%
 CatalogFile.NTx86   = USBPcapx86.cat
 CatalogFile.NTamd64 = USBPcapamd64.cat
@@ -15,33 +14,30 @@ DefaultDestDir = 12
 [SourceDisksFiles]
 USBPcap.sys = 1,,
 
-[Manufacturer]
-%StdMfg% = Standard, NT$ARCH$
+[DefaultInstall.NT]
+CopyFiles = USBPcap.Files
+AddReg    = USBPcap.AddReg
 
-[Standard.NT$ARCH$]
-%USBPcap.DeviceDesc% = USBPcap, USB\ROOT_HUB
-%USBPcap.DeviceDesc% = USBPcap, USB\ROOT_HUB20
+[DefaultUninstall.NT]
+DelFiles  = USBPcap.Files
+DelReg    = USBPcap.DelReg
 
-[USBPcap.NT]
-Include   = usbport.inf
-Needs     = ROOTHUB.Dev.NT
-CopyFiles = USBPcap.NT.Copy
+[USBPcap.AddReg]
+;Add USBPcap to UpperFilters
+HKLM, System\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}, UpperFilters, 0x00010008, USBPcap
 
-[USBPcap.NT.HW]
-AddReg  = USBPcap.NT.HW.AddReg
-Include = usbport.inf
-Needs   = ROOTHUB.Dev.NT.HW
+[USBPcap.DelReg]
+;Delete USBPcap from UpperFilters
+HKLM, System\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}, UpperFilters, 0x00018002, USBPcap
 
-[USBPcap.NT.Copy]
+[USBPcap.Files]
 USBPcap.sys
 
-[USBPcap.NT.HW.AddReg]
-HKR,,UpperFilters,0x00010000,"USBPcap"
-
-[USBPcap.NT.Services]
+[DefaultInstall.NT.Services]
 AddService = USBPcap,,USBPcap_Service_Inst
-Include    = usbport.inf
-Needs      = ROOTHUB.Dev.NT.Services
+
+[DefaultUninstall.NT.Services]
+AddService = USBPcap
 
 [USBPcap_Service_Inst]
 DisplayName    = %USBPcap.SvcDesc%

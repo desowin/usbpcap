@@ -196,6 +196,15 @@ NTSTATUS AddDevice(IN PDRIVER_OBJECT pDrvObj,
     UNICODE_STRING    usTgtName;
     PDEVICE_OBJECT    pHubFilter = NULL;
     PDEVICE_EXTENSION pDevExt = NULL;
+    BOOLEAN           isRootHub;
+
+    // 1. Check if device is Root Hub
+    isRootHub = USBPcapIsDeviceRootHub(pTgtDevObj);
+    if (isRootHub == FALSE)
+    {
+        /* Do not attach to non-RootHub devices */
+        return STATUS_SUCCESS;
+    }
 
     // 2. Create filter object
     ntStat = IoCreateDevice(pDrvObj,
