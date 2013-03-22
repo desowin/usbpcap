@@ -3,6 +3,7 @@
 #include "USBPcapURB.h"
 #include "USBPcapRootHubControl.h"
 #include "USBPcapBuffer.h"
+#include "USBPcapHelperFunctions.h"
 
 ///////////////////////////////////////////////////////////////////////
 // I/O device control request handlers
@@ -38,6 +39,9 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     {
         PDEVICE_EXTENSION      rootExt;
         PUSBPCAP_ROOTHUB_DATA  pRootData;
+	UINT_PTR               info;
+
+	info = (UINT_PTR)0;
 
         rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
         pRootData = (PUSBPCAP_ROOTHUB_DATA)rootExt->context.usb.pDeviceData->pRootData;
@@ -72,13 +76,49 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                 pRootData->filtered = FALSE;
                 break;
 
+            case IOCTL_USBPCAP_GET_HUB_SYMLINK:
+            {
+                PWSTR interfaces;
+
+                DkDbgStr("IOCTL_USBPCAP_GET_HUB_SYMLINK");
+
+                interfaces = USBPcapGetHubInterfaces(rootExt->pNextDevObj);
+                if (interfaces == NULL)
+                {
+                    ntStat = STATUS_NOT_FOUND;
+                }
+                else
+                {
+                    SIZE_T length;
+
+                    length = wcslen(interfaces);
+                    length = (length+1)*sizeof(WCHAR);
+
+                    if (pStack->Parameters.DeviceIoControl.OutputBufferLength < length)
+                    {
+		        DkDbgVal("Too small buffer", length);
+                        ntStat = STATUS_BUFFER_TOO_SMALL;
+                    }
+                    else
+                    {
+                        RtlCopyMemory(pIrp->AssociatedIrp.SystemBuffer,
+                                      (PVOID)interfaces,
+                                      length);
+	                info = (UINT_PTR)length;
+		        DkDbgVal("Successfully copied data", length);
+                    }
+                    ExFreePool((PVOID)interfaces);
+                }
+                break;
+            }
+
             default:
                 DkDbgVal("This: IOCTL_XXXXX", ctlCode);
                 ntStat = STATUS_INVALID_DEVICE_REQUEST;
                 break;
         }
 
-        DkCompleteRequest(pIrp, ntStat, 0);
+        DkCompleteRequest(pIrp, ntStat, info);
     }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);

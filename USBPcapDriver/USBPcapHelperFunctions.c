@@ -14,6 +14,7 @@
  *  along with this program.  If not, see <http://www.gnu.org/licenses>.
  */
 
+#define INITGUID
 #include "USBPcapMain.h"
 #include "USBPcapHelperFunctions.h"
 
@@ -721,8 +722,6 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
 #define REGSTR_VAL_MAX_HCID_LEN 1024
 #define MAX_HARDWARE_IDS 64
 
-#define MAXIMUM_HARDWARE_ID_LEN (REGSTR_VAL_MAX_HCID_LEN * MAX_HARDWARE_IDS)
-
 /*
  * Checks if device is Root Hub
  * In case of any error condition, it is assumed that device is not a root hub.
@@ -743,7 +742,7 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
     BOOLEAN         found = FALSE;
 
     hwid = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool,
-                                         MAXIMUM_HARDWARE_ID_LEN,
+                                         REGSTR_VAL_MAX_HCID_LEN,
                                          'DIWH');
 
     if (hwid == NULL)
@@ -752,7 +751,7 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
         return FALSE;
     }
 
-    RtlFillMemory(hwid, MAXIMUM_HARDWARE_ID_LEN, '\0');
+    RtlFillMemory(hwid, REGSTR_VAL_MAX_HCID_LEN, '\0');
     status = USBPcapGetTargetDevicePdo(device, &pdo);
 
     if (!NT_SUCCESS(status))
@@ -764,7 +763,7 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
 
     status = IoGetDeviceProperty(pdo,
                                  DevicePropertyHardwareID,
-                                 MAXIMUM_HARDWARE_ID_LEN,
+                                 REGSTR_VAL_MAX_HCID_LEN,
                                  hwid,
                                  &length);
 
@@ -826,5 +825,42 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
     ExFreePool((PVOID)hwid);
 
     return found;
+}
+
+/*
+ * Retrieves USB HUB symbolic link list.
+ *
+ * Returns PWSTR on success, which must be freed using ExFreePool.
+ * On failure returns NULL.
+ */
+__drv_requiresIRQL(PASSIVE_LEVEL)
+PWSTR USBPcapGetHubInterfaces(PDEVICE_OBJECT hub)
+{
+    NTSTATUS status;
+    PDEVICE_OBJECT pdo;
+    PWSTR interfaces;
+
+    status = USBPcapGetTargetDevicePdo(hub, &pdo);
+
+    if (!NT_SUCCESS(status))
+    {
+        DkDbgStr("Failed to get hub PDO!");
+        return NULL;
+    }
+
+    status = IoGetDeviceInterfaces(&GUID_DEVINTERFACE_USB_HUB,
+                                   pdo,
+                                   (ULONG)0,
+                                   &interfaces);
+
+    ObDereferenceObject((PVOID)pdo);
+
+    if (!NT_SUCCESS(status))
+    {
+        DkDbgVal("Failed to get device interfaces!", status);
+        return NULL;
+    }
+
+    return interfaces;
 }
 

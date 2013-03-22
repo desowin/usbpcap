@@ -76,8 +76,6 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     PDEVICE_EXTENSION   pDevExt = NULL;
     PIO_STACK_LOCATION  pStack = NULL;
     PDEVICE_OBJECT      pNextDevObj = NULL;
-    PDKQUE_DAT          pQueDat = NULL;
-    PDKPORT_DAT         pDat = NULL;
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
     ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);

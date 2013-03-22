@@ -26,6 +26,7 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <tchar.h>
 #include "filters.h"
 
 struct filters **usbpcapFilters;
@@ -110,7 +111,7 @@ NTCLOSE                 NtClose;
  */
 static BOOL init_undocumented()
 {
-    HMODULE ntdll_handle = LoadLibrary("ntdll.dll");
+    HMODULE ntdll_handle = LoadLibrary(_T("ntdll.dll"));
 
     if (ntdll_handle == NULL)
     {

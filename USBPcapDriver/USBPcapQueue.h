@@ -18,23 +18,5 @@ IO_CSQ_COMPLETE_CANCELED_IRP DkCsqCompleteCanceledIrp;
 
 VOID DkCsqCleanUpQueue(PDEVICE_OBJECT pDevObj, PIRP pIrp);
 
-#define DKQUE_SZ     5120
-#define DKQUE_MTAG   (ULONG)'kEdA'
-
-typedef struct DKQUE_DAT_Tag {
-    DKPORT_DAT            Dat;
-    struct DKQUE_DAT_Tag  *pNext;
-} DKQUE_DAT, *PDKQUE_DAT;
-
-VOID DkQueInitialize(VOID);
-
-BOOLEAN DkQueAdd(CONST PWCHAR pStrFuncName, ULONG ulFuncNameLen, PUCHAR pDat, ULONG ulDatLen, USHORT ushIsOut);
-
-PDKQUE_DAT DkQueGet(VOID);
-
-VOID DkQueDel(PDKQUE_DAT pItem);
-
-VOID DkQueCleanUpData(VOID);
-
 #endif /* USBPCAP_QUEUE_H */
 

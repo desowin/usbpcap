@@ -24,11 +24,14 @@
  */
 
 #include <windows.h>
+#include <winioctl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <Shlwapi.h>
 #include "filters.h"
 #include "thread.h"
+#include "USBPcap.h"
+#include "enum.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
@@ -51,6 +54,7 @@ int __cdecl main(int argc, CHAR **argv)
     while (usbpcapFilters[i] != NULL)
     {
         printf("%d %s\n", i+1, usbpcapFilters[i]->device);
+        enumerate_attached_devices(usbpcapFilters[i]->device);
         i++;
     }
 
@@ -116,7 +120,7 @@ int __cdecl main(int argc, CHAR **argv)
                     break;
                 }
             }
-            data.filename = StrDup(buffer);
+            data.filename = _strdup(buffer);
             finished = TRUE;
         }
 
