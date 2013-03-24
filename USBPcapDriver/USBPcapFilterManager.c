@@ -187,8 +187,6 @@ static ULONG GetDeviceTypeToUse(PDEVICE_OBJECT pdo)
 
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
-//
-// Filter object is set to new filter device on success
 NTSTATUS AddDevice(IN PDRIVER_OBJECT pDrvObj,
                    IN PDEVICE_OBJECT pTgtDevObj)
 {

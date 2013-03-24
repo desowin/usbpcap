@@ -39,9 +39,9 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     {
         PDEVICE_EXTENSION      rootExt;
         PUSBPCAP_ROOTHUB_DATA  pRootData;
-	UINT_PTR               info;
+        UINT_PTR               info;
 
-	info = (UINT_PTR)0;
+        info = (UINT_PTR)0;
 
         rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
         pRootData = (PUSBPCAP_ROOTHUB_DATA)rootExt->context.usb.pDeviceData->pRootData;
@@ -96,7 +96,7 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
                     if (pStack->Parameters.DeviceIoControl.OutputBufferLength < length)
                     {
-		        DkDbgVal("Too small buffer", length);
+                        DkDbgVal("Too small buffer", length);
                         ntStat = STATUS_BUFFER_TOO_SMALL;
                     }
                     else
@@ -104,8 +104,8 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                         RtlCopyMemory(pIrp->AssociatedIrp.SystemBuffer,
                                       (PVOID)interfaces,
                                       length);
-	                info = (UINT_PTR)length;
-		        DkDbgVal("Successfully copied data", length);
+                        info = (UINT_PTR)length;
+                        DkDbgVal("Successfully copied data", length);
                     }
                     ExFreePool((PVOID)interfaces);
                 }

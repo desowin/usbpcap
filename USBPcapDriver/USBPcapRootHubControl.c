@@ -76,7 +76,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
                             &ntDeviceName,
                             FILE_DEVICE_UNKNOWN,
                             FILE_DEVICE_SECURE_OPEN,
-                            FALSE,
+                            TRUE, /* Exclusive device */
                             &controlDevice);
 
     if (NT_SUCCESS(status))

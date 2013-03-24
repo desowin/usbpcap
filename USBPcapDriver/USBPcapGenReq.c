@@ -31,7 +31,7 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         IoSkipCurrentIrpStackLocation(pIrp);
         ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
     }
-    else
+    else if (pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL)
     {
         // Handling Create, Close and Cleanup request for this object
         switch (pStack->MajorFunction)
@@ -42,6 +42,11 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
             case IRP_MJ_CLEANUP:
                 DkCsqCleanUpQueue(pDevObj, pIrp);
+                /* Discard any unread data as we don't keep track of the
+                 * pcap packets start offsets. Prepare the buffer to be read
+                 * by new client.
+                 */
+                USBPcapBufferInitializeBuffer(pDevExt);
                 break;
 
 

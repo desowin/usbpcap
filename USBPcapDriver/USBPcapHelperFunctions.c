@@ -741,6 +741,9 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
     ULONG           start;
     BOOLEAN         found = FALSE;
 
+    PAGED_CODE();
+    ASSERT(KeGetCurrentIrql() <= PASSIVE_LEVEL);
+
     hwid = (WCHAR*)ExAllocatePoolWithTag(NonPagedPool,
                                          REGSTR_VAL_MAX_HCID_LEN,
                                          'DIWH');
@@ -839,6 +842,9 @@ PWSTR USBPcapGetHubInterfaces(PDEVICE_OBJECT hub)
     NTSTATUS status;
     PDEVICE_OBJECT pdo;
     PWSTR interfaces;
+
+    PAGED_CODE();
+    ASSERT(KeGetCurrentIrql() <= PASSIVE_LEVEL);
 
     status = USBPcapGetTargetDevicePdo(hub, &pdo);
 

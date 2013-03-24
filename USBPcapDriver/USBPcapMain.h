@@ -7,6 +7,9 @@
 #ifndef USBPCAP_MAIN_H
 #define USBPCAP_MAIN_H
 
+#ifndef _PREFAST_
+#pragma warning(disable:4068)
+#endif
 
 ////////////////////////////////////////////////////////////
 // WDK headers defined here

@@ -336,6 +336,34 @@ NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
     return status;
 }
 
+/*
+ * If there is buffer allocated for given control device, writes global
+ * PCAP header to the buffer, otherwise does nothing.
+ */
+VOID USBPcapBufferInitializeBuffer(PDEVICE_EXTENSION pDevExt)
+{
+    PDEVICE_EXTENSION      pRootExt;
+    PUSBPCAP_ROOTHUB_DATA  pData;
+    KIRQL                  irql;
+
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+
+    pRootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+    pData = pRootExt->context.usb.pDeviceData->pRootData;
+
+    if (pData->buffer == NULL)
+    {
+        return;
+    }
+
+    /* Buffer found - reset all data and write global PCAP header */
+    KeAcquireSpinLock(&pData->bufferLock, &irql);
+    pData->readOffset = 0;
+    pData->writeOffset = 0;
+    USBPcapWriteGlobalHeader(pData);
+    KeReleaseSpinLock(&pData->bufferLock, irql);
+}
+
 NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
                                     PDEVICE_EXTENSION pDevExt,
                                     PUINT32 pBytesRead)
