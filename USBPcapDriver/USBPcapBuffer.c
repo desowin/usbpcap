@@ -19,8 +19,8 @@
 
 #define USBPCAP_BUFFER_TAG  (ULONG)'ffuB'
 #define USBPCAP_SNAP_LEN    65535
-/* DLT from private range. To be changed after DLT registration. */
-#define USBPCAP_DLT         147
+/* USB packets, beginning with a USBPcap header */
+#define DLT_USBPCAP         249
 
 #pragma pack(1)
 typedef struct pcap_hdr_s {
@@ -268,7 +268,7 @@ USBPcapWriteGlobalHeader(PUSBPCAP_ROOTHUB_DATA pData)
     header.thiszone = 0 /* Assume UTC */;
     header.sigfigs = 0;
     header.snaplen = USBPCAP_SNAP_LEN;
-    header.network = USBPCAP_DLT;
+    header.network = DLT_USBPCAP;
 
     ASSERT (USBPcapGetBufferFree(pData) >= sizeof(header));
 

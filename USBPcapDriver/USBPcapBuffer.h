@@ -19,6 +19,7 @@
 
 #include "USBPcapMain.h"
 
+/* All multi-byte fields are stored in .pcap file in little endian */
 
 #define USBPCAP_TRANSFER_ISOCHRONOUS 0
 #define USBPCAP_TRANSFER_INTERRUPT   1
