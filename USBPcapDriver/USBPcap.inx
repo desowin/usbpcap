@@ -1,5 +1,7 @@
 [Version]
 Signature           = "$WINDOWS NT$"
+Class               = USB
+ClassGuid           = {36FC9E60-C465-11CF-8056-444553540000}
 DriverPackageType   = ClassFilter
 Provider            = %PROVIDER%
 CatalogFile.NTx86   = USBPcapx86.cat

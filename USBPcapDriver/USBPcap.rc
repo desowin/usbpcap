@@ -16,9 +16,9 @@ BEGIN
             VALUE "CompanyName",      "USBPcap"
             VALUE "FileDescription",  "USBPcap Driver"
             VALUE "FileVersion",      "1.0.0.1"
-            VALUE "InternalName",     "USBPcapDriver"
+            VALUE "InternalName",     "USBPcap"
             VALUE "LegalCopyright",   "(c) 2013 Tomasz Mon"
-            VALUE "OriginalFilename", "USBPcapDriver"
+            VALUE "OriginalFilename", "USBPcap"
             VALUE "ProductName",      "USBPcap Sniffer Driver"
             VALUE "ProductVersion",   "1.0.0.1"
         END
