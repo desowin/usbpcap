@@ -154,7 +154,8 @@ Section "USBPcap Driver"
     ${DisableX64FSRedirection}
     SetRegView 64
   ${EndIf}
-  ExecWait '$SYSDIR\RUNDLL32.EXE advpack.dll,LaunchINFSection "$INSTDIR\USBPcap.inf",DefaultInstall'
+  SetOutPath "$INSTDIR"
+  ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf'
 
 !ifndef INNER
   SetOutPath "$INSTDIR"
@@ -180,7 +181,8 @@ Section "Uninstall"
     ${DisableX64FSRedirection}
     SetRegView 64
   ${EndIf}
-  ExecWait '$SYSDIR\RUNDLL32.EXE advpack.dll,LaunchINFSection "$INSTDIR\USBPcap.inf",DefaultUninstall'
+  SetOutPath "$INSTDIR"
+  ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultUninstall 128 .\USBPcap.inf'
 
   Delete $INSTDIR\Uninstall.exe
   Delete $INSTDIR\USBPcap.inf

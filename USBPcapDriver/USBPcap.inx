@@ -36,12 +36,12 @@ HKLM, System\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-4445535400
 USBPcap.sys
 
 [DefaultInstall.NT.Services]
-AddService = USBPcap,,USBPcap_Service_Inst
+AddService = USBPcap,,Service.AddService
 
 [DefaultUninstall.NT.Services]
-AddService = USBPcap
+DelService = USBPcap
 
-[USBPcap_Service_Inst]
+[Service.AddService]
 DisplayName    = %USBPcap.SvcDesc%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
