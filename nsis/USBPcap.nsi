@@ -3,7 +3,7 @@
 
 !include "GetWindowsVersion.nsh"
 
-!define VERSION "1.0.0.1"
+!define VERSION $%_USBPCAP_VERSION%
 
 Name "USBPcap ${VERSION}"
 
@@ -30,10 +30,7 @@ RequestExecutionLevel admin
 
   ; That will have written an uninstaller binary for us.  Now we sign it
   ; with your favourite code signing tool.
-  ;
-  ; Replace the amd64 in path with x86 when building on 32-bit Windows
-
-  !system "C:\WinDDK\7600.16385.1\bin\amd64\SignTool.exe sign /f ..\certificates\USBPcapTestCert.pfx /t http://timestamp.verisign.com/scripts/timestamp.dll $%TEMP%\Uninstall.exe" = 0
+  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS% $%TEMP%\Uninstall.exe' = 0
 
   ; Good.  Now we can carry on writing the real installer.
 

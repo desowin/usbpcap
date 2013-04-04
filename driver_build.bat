@@ -28,16 +28,15 @@ if "%_BUILDARCH%"=="x86" (
 )
 
 cd %~dp0
+CALL config.bat
 
 build -ceZg
 if exist build%BUILD_ALT_DIR%.err goto error
 
 ::Sign the USBPcapCMD.exe, it is not critical so do not fail on error
-SignTool sign /f certificates\USBPcapTestCert.pfx /t http://timestamp.verisign.com/scripts/timestamp.dll USBPcapCMD\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcapCMD.exe
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS% USBPcapCMD\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcapCMD.exe
 
-::In order to sign the binary with real certificate replace the
-::certificates\USBPcapTestCert.pfx with path to your certificate
-SignTool sign /f certificates\USBPcapTestCert.pfx /t http://timestamp.verisign.com/scripts/timestamp.dll USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS% USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
 if errorlevel 1 goto error
 
 Inf2cat.exe /driver:USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\ /os:%USBPcap_OS%
@@ -50,8 +49,11 @@ pause
 exit /B 1
 
 :end
+
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys %3
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.inf %3
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\%USBPcap_catalog% %3
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS% %3\%USBPcap_catalog%
+if errorlevel 1 goto error
 
 exit /B 0

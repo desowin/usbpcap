@@ -14,6 +14,7 @@ if "%1"=="x86" (
 )
 
 cd %~dp0
+CALL config.bat
 
 ::Delete the release directory if it already exists
 if exist %USBPcap_prefix%\Win8Release RMDIR /S /Q %USBPcap_prefix%\Win8Release
@@ -21,9 +22,7 @@ if exist %USBPcap_prefix%\Win8Release RMDIR /S /Q %USBPcap_prefix%\Win8Release
 Nmake2MsBuild dirs
 MSBuild dirs.sln /p:Configuration="Win8 Release"
 
-::In order to sign the binary with real certificate replace the
-::certificates\USBPcapTestCert.pfx with path to your certificate
-SignTool sign /f certificates\USBPcapTestCert.pfx /t http://timestamp.verisign.com/scripts/timestamp.dll Win8Release\Package\USBPcap.sys
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS% %USBPcap_prefix%\Win8Release\Package\USBPcap.sys
 if errorlevel 1 goto error
 
 Inf2cat.exe /driver:%USBPcap_prefix%\Win8Release\Package\ /os:%USBPcap_OS%
@@ -39,5 +38,7 @@ exit /B 1
 copy %USBPcap_prefix%\Win8Release\Package\USBPcap.sys %2
 copy %USBPcap_prefix%\Win8Release\Package\USBPcap.inf %2
 copy %USBPcap_prefix%\Win8Release\Package\%USBPcap_catalog% %2
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS% %2\%USBPcap_catalog%
+if errorlevel 1 goto error
 
 exit /B 0
