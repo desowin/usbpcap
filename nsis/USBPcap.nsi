@@ -74,6 +74,20 @@ Function .onInit
   Quit  ; just bail out quickly when running the "inner" installer
 !endif
 
+  ${If} ${RunningX64}
+    ${DisableX64FSRedirection}
+    SetRegView 64
+  ${EndIf}
+  ReadRegStr $R0 HKLM \
+  "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+  "UninstallString"
+  StrCmp $R0 "" done
+
+  MessageBox MB_OK|MB_ICONEXCLAMATION \
+  "USBPcap is already installed. Please uninstall it first."
+  Abort
+
+done:
   Push $R0
   ${GetWindowsVersion} $R0
 
@@ -102,6 +116,17 @@ InstType "Minimal"
 Section "USBPcap Driver"
   SectionIn RO
   SetOutPath "$INSTDIR"
+
+  ${If} ${RunningX64}
+    ${DisableX64FSRedirection}
+    SetRegView 64
+  ${EndIf}
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                   "DisplayName" "USBPcap ${VERSION}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                   "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                   "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
 
   ${GetWindowsVersion} $R0
   ${Select} $R0
@@ -147,15 +172,9 @@ Section "USBPcap Driver"
       ${EndIf}
   ${EndSelect}
 
-  ${If} ${RunningX64}
-    ${DisableX64FSRedirection}
-    SetRegView 64
-  ${EndIf}
-  SetOutPath "$INSTDIR"
   ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf'
 
 !ifndef INNER
-  SetOutPath "$INSTDIR"
   ; this packages the signed uninstaller
   File $%TEMP%\Uninstall.exe
 !endif
@@ -195,6 +214,8 @@ Section "Uninstall"
     Delete $INSTDIR\USBPcapCMD.exe
   PastCMDCheck:
   RMDir /R /REBOOTOK $INSTDIR
+
+  DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap"
 SectionEnd
 !endif
 
