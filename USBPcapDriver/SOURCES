@@ -9,6 +9,7 @@ USBPCAP_VERSION=1.0.0.1
 NTTARGETFILE2=$(OBJ_PATH)\$(O)\$(INF_NAME).inf
 
 TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib \
+             $(DDK_LIB_PATH)\Wdmsec.lib \
              $(DDK_LIB_PATH)\Ntstrsafe.lib \
              $(DDK_LIB_PATH)\Ntoskrnl.lib \
              $(DDK_LIB_PATH)\USBd.lib

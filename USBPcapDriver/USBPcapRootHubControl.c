@@ -15,6 +15,7 @@
  */
 
 #include "USBPcapMain.h"
+#include <Wdmsec.h>
 #include "USBPcapRootHubControl.h"
 #include "Ntstrsafe.h"
 
@@ -71,13 +72,15 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
     KdPrint(("Creating device %wZ (%wZ)\n",
             &ntDeviceName, &symbolicLinkName));
 
-    status = IoCreateDevice(hubExt->pDrvObj,
-                            sizeof(DEVICE_EXTENSION),
-                            &ntDeviceName,
-                            FILE_DEVICE_UNKNOWN,
-                            FILE_DEVICE_SECURE_OPEN,
-                            TRUE, /* Exclusive device */
-                            &controlDevice);
+    status = IoCreateDeviceSecure(hubExt->pDrvObj,
+                                  sizeof(DEVICE_EXTENSION),
+                                  &ntDeviceName,
+                                  FILE_DEVICE_UNKNOWN,
+                                  FILE_DEVICE_SECURE_OPEN,
+                                  TRUE, /* Exclusive device */
+                                  &SDDL_DEVOBJ_SYS_ALL_ADM_ALL,
+                                  NULL,
+                                  &controlDevice);
 
     if (NT_SUCCESS(status))
     {
