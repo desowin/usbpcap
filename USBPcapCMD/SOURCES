@@ -20,4 +20,5 @@ TARGETLIBS = $(SDK_LIB_PATH)\hid.lib \
 SOURCES = cmd.c \
           enum.c \
           filters.c \
+          getopt.c \
           thread.c

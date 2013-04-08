@@ -29,7 +29,7 @@
 #include <tchar.h>
 #include "filters.h"
 
-struct filters **usbpcapFilters;
+struct filters **usbpcapFilters = NULL;
 
 struct list_entry;
 
@@ -318,6 +318,11 @@ void filters_initialize()
 void filters_free()
 {
     int i = 0;
+
+    if (usbpcapFilters == NULL)
+    {
+        return;
+    }
 
     while (usbpcapFilters[i] != NULL)
     {

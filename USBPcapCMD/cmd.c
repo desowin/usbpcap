@@ -32,22 +32,20 @@
 #include "thread.h"
 #include "USBPcap.h"
 #include "enum.h"
+#include "getopt.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
-int __cdecl main(int argc, CHAR **argv)
+int cmd_interactive(struct thread_data *data)
 {
     int i = 0;
     int max_i;
-    struct thread_data data;
     char *filename;
     char buffer[INPUT_BUFFER_SIZE];
-    HANDLE thread;
-    DWORD thread_id;
     BOOL finished;
     BOOL exit = FALSE;
 
-    data.filename = NULL;
+    data->filename = NULL;
 
     filters_initialize();
     printf("Following filter control device are available:\n");
@@ -85,7 +83,7 @@ int __cdecl main(int argc, CHAR **argv)
                 }
                 else
                 {
-                    data.device = usbpcapFilters[value-1]->device;
+                    data->device = _strdup(usbpcapFilters[value-1]->device);
                     finished = TRUE;
                 }
             }
@@ -95,7 +93,7 @@ int __cdecl main(int argc, CHAR **argv)
     if (exit == TRUE)
     {
         filters_free();
-        return 0;
+        return -1;
     }
 
     finished = FALSE;
@@ -120,11 +118,65 @@ int __cdecl main(int argc, CHAR **argv)
                     break;
                 }
             }
-            data.filename = _strdup(buffer);
+            data->filename = _strdup(buffer);
             finished = TRUE;
         }
 
     } while (finished == FALSE);
+
+    return 0;
+}
+
+int __cdecl main(int argc, CHAR **argv)
+{
+    struct thread_data data;
+    int c;
+    HANDLE thread;
+    DWORD thread_id;
+    BOOL interactive;
+
+    data.filename = NULL;
+    data.device = NULL;
+
+    while ((c = getopt(argc, argv, "d:o:")) != -1)
+    {
+        switch (c)
+        {
+            case 'd':
+                data.device = _strdup(optarg);
+                break;
+            case 'o':
+                data.filename = _strdup(optarg);
+                break;
+            default:
+                break;
+        }
+    }
+
+    if (data.filename != NULL && data.device != NULL)
+    {
+        interactive = FALSE;
+    }
+    else
+    {
+        interactive = TRUE;
+        if (data.filename != NULL)
+        {
+            LocalFree(data.filename);
+            data.filename = NULL;
+        }
+
+        if (data.device != NULL)
+        {
+            LocalFree(data.device);
+            data.device = NULL;
+        }
+
+        if (cmd_interactive(&data) < 0)
+        {
+            return 0;
+        }
+    }
 
     data.process = TRUE;
 
@@ -137,7 +189,10 @@ int __cdecl main(int argc, CHAR **argv)
 
     if (thread == NULL)
     {
-        printf("Failed to create thread\n");
+        if (interactive == TRUE)
+        {
+            printf("Failed to create thread\n");
+        }
     }
     else
     {
@@ -155,6 +210,12 @@ int __cdecl main(int argc, CHAR **argv)
     }
 
     filters_free();
+
+    if (data.device != NULL)
+    {
+        LocalFree(data.filename);
+    }
+
     if (data.filename != NULL)
     {
         LocalFree(data.filename);

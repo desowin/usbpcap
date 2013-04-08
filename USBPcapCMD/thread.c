@@ -46,13 +46,20 @@ DWORD WINAPI read_thread(LPVOID param)
     char* outBuf = NULL;
     DWORD outBufSize = 0;
 
-    write_handle = CreateFileA(data->filename,
-                               GENERIC_WRITE,
-                               0,
-                               NULL,
-                               CREATE_NEW,
-                               FILE_ATTRIBUTE_NORMAL,
-                               NULL);
+    if (strncmp("-", data->filename, 2) == 0)
+    {
+        write_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+    }
+    else
+    {
+        write_handle = CreateFileA(data->filename,
+                                   GENERIC_WRITE,
+                                   0,
+                                   NULL,
+                                   CREATE_NEW,
+                                   FILE_ATTRIBUTE_NORMAL,
+                                   NULL);
+    }
 
     if (write_handle == INVALID_HANDLE_VALUE)
     {
