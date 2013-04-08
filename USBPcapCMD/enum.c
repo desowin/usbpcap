@@ -26,11 +26,83 @@
 #define OOPS()
 #endif
 
-#define WIDE_PRINTF(fmt, ...) \
-{ \
-    _setmode(_fileno(stdout), _O_U16TEXT); \
-    wprintf(fmt, __VA_ARGS__); \
-    _setmode(_fileno(stdout), _O_TEXT); \
+void wide_print(LPCWSTR string) {
+    HANDLE std_out;
+    BOOL console_output;
+    DWORD type;
+
+    /*
+     * std_out describes the standard output device. This can be the console
+     * or (if output has been redirected) a file or some other device type.
+     */
+    std_out = GetStdHandle(STD_OUTPUT_HANDLE);
+
+    if (std_out == INVALID_HANDLE_VALUE)
+    {
+        goto fallback;
+    }
+
+    /*
+     * Check whether the handle describes a character device.  If it does,
+     * then it may be a console device. A call to GetConsoleMode will fail
+     * with ERROR_INVALID_HANDLE if it is not a console device.
+     */
+    type = GetFileType(std_out);
+
+    if ((type == FILE_TYPE_UNKNOWN) &&
+        (GetLastError() != ERROR_SUCCESS))
+    {
+        goto fallback;
+    }
+
+    type &= ~(FILE_TYPE_REMOTE);
+
+    if (type == FILE_TYPE_CHAR)
+    {
+        DWORD mode;
+        BOOL result;
+
+        result = GetConsoleMode(std_out, &mode);
+
+        if ((result == FALSE) && (GetLastError() == ERROR_INVALID_HANDLE))
+        {
+            console_output = FALSE;
+        }
+        else
+        {
+            console_output = TRUE;
+        }
+    }
+    else
+    {
+        console_output = FALSE;
+    }
+
+    /*
+     * If std_out is a console device then just use the UNICODE console
+     * write API. This API doesn't work if std_out has been redirected to
+     * a file or some other device. In this case, do our best and use
+     * wprintf.
+     */
+    if (console_output != FALSE)
+    {
+        DWORD nchars;
+        DWORD written;
+
+        fflush(stdout);
+        nchars = (DWORD) wcslen(string);
+        WriteConsoleW(std_out,
+                      (PVOID)string,
+                      nchars,
+                      &written,
+                      NULL);
+        return;
+    }
+
+fallback:
+    _setmode(_fileno(stdout), _O_U16TEXT);
+    wprintf(L"%ls", string);
+    _setmode(_fileno(stdout), _O_TEXT);
 }
 
 static void EnumerateHub(PTSTR hub,
@@ -413,7 +485,8 @@ EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level)
                 PWSTR deviceDesc = DriverNameToDeviceDesc(driverKeyName, FALSE);
 
                 print_indent(level);
-                WIDE_PRINTF(L"%s\n", deviceDesc);
+                wide_print(deviceDesc);
+                printf("\n");
                 GlobalFree(driverKeyName);
             }
 
@@ -584,7 +657,9 @@ void enumerate_attached_devices(char *filter)
         {
             PTSTR str;
 
-            WIDE_PRINTF(L"  %ls\n", outBuf);
+            printf("  ");
+            wide_print(outBuf);
+            printf("\n");
 
             str = WideStrToMultiStr(outBuf);
             EnumerateHub(str, NULL, 2);
