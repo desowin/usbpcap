@@ -27,6 +27,8 @@
 #include "USBPcapQueue.h"
 #include "include\USBPcap.h"
 
+#define USBPCAP_DEFAULT_SNAP_LEN  65535
+
 typedef struct _USBPCAP_ROOTHUB_DATA
 {
     /* Circular-Buffer related variables */
@@ -35,6 +37,9 @@ typedef struct _USBPCAP_ROOTHUB_DATA
     UINT32                 bufferSize;
     UINT32                 readOffset;
     UINT32                 writeOffset;
+
+    /* Snapshot length */
+    UINT32                 snaplen;
 
     /* TRUE if the roothub data is being monitored */
     volatile BOOLEAN       filtered;

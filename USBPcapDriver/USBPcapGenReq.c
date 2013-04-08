@@ -42,11 +42,8 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
             case IRP_MJ_CLEANUP:
                 DkCsqCleanUpQueue(pDevObj, pIrp);
-                /* Discard any unread data as we don't keep track of the
-                 * pcap packets start offsets. Prepare the buffer to be read
-                 * by new client.
-                 */
-                USBPcapBufferInitializeBuffer(pDevExt);
+                /* Free the buffer allocated for this device. */
+                USBPcapBufferRemoveBuffer(pDevExt);
                 break;
 
 

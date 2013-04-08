@@ -81,6 +81,42 @@ DWORD WINAPI read_thread(LPVOID param)
         goto finish;
     }
 
+    inBuf = malloc(sizeof(USBPCAP_IOCTL_SIZE));
+    ((PUSBPCAP_IOCTL_SIZE)inBuf)->size = data->snaplen;
+    inBufSize = sizeof(USBPCAP_IOCTL_SIZE);
+
+    if (!DeviceIoControl(filter_handle,
+                         IOCTL_USBPCAP_SET_SNAPLEN_SIZE,
+                         inBuf,
+                         inBufSize,
+                         outBuf,
+                         outBufSize,
+                         &bytes_ret,
+                         0))
+    {
+        printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
+                GetLastError(),
+                bytes_ret);
+        goto finish;
+    }
+
+    ((PUSBPCAP_IOCTL_SIZE)inBuf)->size = 1024*1024;
+
+    if (!DeviceIoControl(filter_handle,
+                         IOCTL_USBPCAP_SETUP_BUFFER,
+                         inBuf,
+                         inBufSize,
+                         outBuf,
+                         outBufSize,
+                         &bytes_ret,
+                         0))
+    {
+        printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
+                GetLastError(),
+                bytes_ret);
+        goto finish;
+    }
+
     if (!DeviceIoControl(filter_handle,
                          IOCTL_USBPCAP_START_FILTERING,
                          inBuf,
@@ -93,26 +129,6 @@ DWORD WINAPI read_thread(LPVOID param)
         printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
                GetLastError(),
                bytes_ret);
-        goto finish;
-    }
-
-    inBuf = malloc(sizeof(USBPCAP_BUFFER_SIZE));
-    ((PUSBPCAP_BUFFER_SIZE)inBuf)->size = 1024*1024;
-    inBufSize = sizeof(USBPCAP_BUFFER_SIZE);
-
-    if (!DeviceIoControl(filter_handle,
-                         IOCTL_USBPCAP_SETUP_BUFFER,
-                         inBuf,
-                         inBufSize,
-                         outBuf,
-                         outBufSize,
-                         &bytes_ret,
-                         0))
-    {
-
-        printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
-                GetLastError(),
-                bytes_ret);
         goto finish;
     }
 

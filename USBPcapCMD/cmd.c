@@ -137,8 +137,9 @@ int __cdecl main(int argc, CHAR **argv)
 
     data.filename = NULL;
     data.device = NULL;
+    data.snaplen = 65535;
 
-    while ((c = getopt(argc, argv, "d:o:")) != -1)
+    while ((c = getopt(argc, argv, "d:o:s:")) != -1)
     {
         switch (c)
         {
@@ -147,6 +148,14 @@ int __cdecl main(int argc, CHAR **argv)
                 break;
             case 'o':
                 data.filename = _strdup(optarg);
+                break;
+            case 's':
+                data.snaplen = atol(optarg);
+                if (data.snaplen == 0)
+                {
+                    printf("Invalid snapshot length!\n");
+                    return -1;
+                }
                 break;
             default:
                 break;

@@ -32,6 +32,7 @@ struct thread_data
 {
     char *device;   /* Filter device object name */
     char *filename; /* pcap filename */
+    UINT32 snaplen; /* Snapshot length */
     volatile BOOL process; /* FALSE if thread should stop */
 };
 

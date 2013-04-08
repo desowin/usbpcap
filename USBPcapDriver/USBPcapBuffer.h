@@ -92,7 +92,10 @@ typedef struct
 
 NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
                             UINT32 bytes);
+NTSTATUS USBPcapSetSnaplenSize(PUSBPCAP_ROOTHUB_DATA pData,
+                               UINT32 bytes);
 
+VOID USBPcapBufferRemoveBuffer(PDEVICE_EXTENSION pDevExt);
 VOID USBPcapBufferInitializeBuffer(PDEVICE_EXTENSION pDevExt);
 NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
                                     PDEVICE_EXTENSION pDevExt,

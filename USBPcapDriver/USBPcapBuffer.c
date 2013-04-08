@@ -18,7 +18,6 @@
 #include "USBPcapBuffer.h"
 
 #define USBPCAP_BUFFER_TAG  (ULONG)'ffuB'
-#define USBPCAP_SNAP_LEN    65535
 /* USB packets, beginning with a USBPcap header */
 #define DLT_USBPCAP         249
 
@@ -267,7 +266,7 @@ USBPcapWriteGlobalHeader(PUSBPCAP_ROOTHUB_DATA pData)
     header.version_minor = 4;
     header.thiszone = 0 /* Assume UTC */;
     header.sigfigs = 0;
-    header.snaplen = USBPCAP_SNAP_LEN;
+    header.snaplen = pData->snaplen;
     header.network = DLT_USBPCAP;
 
     ASSERT (USBPcapGetBufferFree(pData) >= sizeof(header));
@@ -334,6 +333,61 @@ NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
 
     KeReleaseSpinLock(&pData->bufferLock, irql);
     return status;
+}
+
+NTSTATUS USBPcapSetSnaplenSize(PUSBPCAP_ROOTHUB_DATA pData,
+                               UINT32 bytes)
+{
+    NTSTATUS  status;
+    KIRQL     irql;
+
+    if (bytes == 0)
+    {
+        return STATUS_INVALID_PARAMETER;
+    }
+
+    status = STATUS_SUCCESS;
+    KeAcquireSpinLock(&pData->bufferLock, &irql);
+    if (pData->buffer != NULL)
+    {
+        status = STATUS_UNSUCCESSFUL;
+    }
+    else
+    {
+        pData->snaplen = bytes;
+    }
+
+    KeReleaseSpinLock(&pData->bufferLock, irql);
+    return status;
+}
+
+/*
+ * If there is buffer allocated for given control device, frees all
+ * memory allocated to it, otherwise does nothing.
+ */
+VOID USBPcapBufferRemoveBuffer(PDEVICE_EXTENSION pDevExt)
+{
+    PDEVICE_EXTENSION      pRootExt;
+    PUSBPCAP_ROOTHUB_DATA  pData;
+    KIRQL                  irql;
+
+    ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
+
+    pRootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+    pData = pRootExt->context.usb.pDeviceData->pRootData;
+
+    if (pData->buffer == NULL)
+    {
+        return;
+    }
+
+    /* Buffer found - free it */
+    KeAcquireSpinLock(&pData->bufferLock, &irql);
+    pData->readOffset = 0;
+    pData->writeOffset = 0;
+    ExFreePool((PVOID)pData->buffer);
+    pData->buffer = NULL;
+    KeReleaseSpinLock(&pData->bufferLock, irql);
 }
 
 /*
@@ -417,7 +471,8 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
 
 
 __inline static VOID
-USBPcapInitializePcapHeader(pcaprec_hdr_t *pcapHeader,
+USBPcapInitializePcapHeader(PUSBPCAP_ROOTHUB_DATA pData,
+                            pcaprec_hdr_t *pcapHeader,
                             UINT32 bytes)
 {
     LARGE_INTEGER  time;
@@ -432,7 +487,15 @@ USBPcapInitializePcapHeader(pcaprec_hdr_t *pcapHeader,
     pcapHeader->ts_sec = (UINT32)(time.QuadPart/10000000-11644473600);
     pcapHeader->ts_usec = (UINT32)((time.QuadPart%10000000)/10);
 
-    pcapHeader->incl_len = bytes;
+    /* Obey the snaplen limit */
+    if (bytes > pData->snaplen)
+    {
+        pcapHeader->incl_len = pData->snaplen;
+    }
+    else
+    {
+        pcapHeader->incl_len = bytes;
+    }
     pcapHeader->orig_len = bytes;
 }
 
@@ -453,36 +516,43 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
 
     bytes = header->headerLen + header->dataLength;
 
-    USBPcapInitializePcapHeader(&pcapHeader, bytes);
+    USBPcapInitializePcapHeader(pRootData, &pcapHeader, bytes);
 
-    bytes += sizeof(pcaprec_hdr_t);
+    /* pcapHeader.incl_len contains the number of bytes to write */
+    bytes = pcapHeader.incl_len;
 
     status = STATUS_SUCCESS;
 
     KeAcquireSpinLock(&pRootData->bufferLock, &irql);
-    if (USBPcapGetBufferFree(pRootData) < bytes)
+    if ((pRootData->buffer == NULL) ||
+        ((USBPcapGetBufferFree(pRootData) - sizeof(pcaprec_hdr_t)) < bytes))
     {
         DkDbgStr("No enough free space left.");
         status = STATUS_INSUFFICIENT_RESOURCES;
     }
     else
     {
+        UINT32 tmp;
+
         /* Write Packet Header */
         USBPcapBufferWriteUnsafe(pRootData,
                                  (PVOID) &pcapHeader,
                                  (UINT32) sizeof(pcaprec_hdr_t));
 
         /* Write USBPCAP_BUFFER_PACKET_HEADER */
+        tmp = min(bytes, (UINT32)header->headerLen);
         USBPcapBufferWriteUnsafe(pRootData,
                                  (PVOID) header,
-                                 (UINT32) header->headerLen);
+                                 tmp);
+        bytes -= tmp;
 
-        if (header->dataLength > 0)
+        if (bytes > 0 && header->dataLength > 0)
         {
             /* Write data */
+            tmp = min(bytes, header->dataLength);
             USBPcapBufferWriteUnsafe(pRootData,
                                      buffer,
-                                     header->dataLength);
+                                     tmp);
         }
     }
     KeReleaseSpinLock(&pRootData->bufferLock, irql);

@@ -50,16 +50,16 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         {
             case IOCTL_USBPCAP_SETUP_BUFFER:
             {
-                PUSBPCAP_BUFFER_SIZE  pBufferSize;
+                PUSBPCAP_IOCTL_SIZE  pBufferSize;
 
                 if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
-                    sizeof(USBPCAP_BUFFER_SIZE))
+                    sizeof(USBPCAP_IOCTL_SIZE))
                 {
                     ntStat = STATUS_INVALID_PARAMETER;
                     break;
                 }
 
-                pBufferSize = (PUSBPCAP_BUFFER_SIZE)pIrp->AssociatedIrp.SystemBuffer;
+                pBufferSize = (PUSBPCAP_IOCTL_SIZE)pIrp->AssociatedIrp.SystemBuffer;
                 DkDbgVal("IOCTL_USBPCAP_SETUP_BUFFER", pBufferSize->size);
 
                 ntStat = USBPcapSetUpBuffer(pRootData, pBufferSize->size);
@@ -109,6 +109,24 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
                     }
                     ExFreePool((PVOID)interfaces);
                 }
+                break;
+            }
+
+            case IOCTL_USBPCAP_SET_SNAPLEN_SIZE:
+            {
+                PUSBPCAP_IOCTL_SIZE  pSnaplen;
+
+                if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                    sizeof(USBPCAP_IOCTL_SIZE))
+                {
+                    ntStat = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                pSnaplen = (PUSBPCAP_IOCTL_SIZE)pIrp->AssociatedIrp.SystemBuffer;
+                DkDbgVal("IOCTL_USBPCAP_SET_SNAPLEN_SIZE", pSnaplen->size);
+
+                ntStat = USBPcapSetSnaplenSize(pRootData, pSnaplen->size);
                 break;
             }
 
