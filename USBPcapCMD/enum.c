@@ -474,7 +474,13 @@ static void EnumerateHub(PTSTR hub,
         goto EnumerateHubError;
     }
 
-    if (hub[0] == _T('\\'))
+    if (_tcsncmp(_T("\\\?\?\\"), hub, 4) == 0)
+    {
+        /* Replace the \??\ with \\.\ */
+        _tcscpy_s(deviceName, deviceNameSize, _T("\\\\.\\"));
+        _tcscat_s(deviceName, deviceNameSize, &hub[4]);
+    }
+    else if (hub[0] == _T('\\'))
     {
         _tcscpy_s(deviceName, deviceNameSize, hub);
     }
