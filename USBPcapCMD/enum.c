@@ -341,22 +341,114 @@ GetExternalHubNameError:
     return NULL;
 }
 
-/* buf contains the data returned by DriverNameToDeviceDesc */
-static TCHAR buf[MAX_DEVICE_ID_LEN];
-PWSTR DriverNameToDeviceDesc(__in PCTSTR DriverName, BOOLEAN DeviceId)
+static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
 {
-    DEVINST     devInst;
-    DEVINST     devInstNext;
-    CONFIGRET   cr;
-    ULONG       walkDone = 0;
-    ULONG       len;
+    DEVINST    current;
+    DEVINST    next;
+    CONFIGRET  cr;
+    ULONG      level;
+    ULONG      len;
+    TCHAR      buf[MAX_DEVICE_ID_LEN];
+
+    level = indent;
+    current = parent;
+
+    cr = CM_Get_Child(&next, current, 0);
+    if (cr == CR_SUCCESS)
+    {
+        current = next;
+        level++;
+    }
+
+    /* Do depth-first iteration over all children and get their
+     * friendly names. If friendly name is not available for given
+     * child then fallback to device description.
+     */
+    while (level > indent)
+    {
+        len = sizeof(buf) / sizeof(buf[0]);
+        cr = CM_Get_DevNode_Registry_PropertyW(current,
+                                               CM_DRP_FRIENDLYNAME,
+                                               NULL,
+                                               buf,
+                                               &len,
+                                               0);
+        if (cr != CR_SUCCESS)
+        {
+            len = sizeof(buf) / sizeof(buf[0]);
+            /* Failed to get friendly name,
+             * display device description instead */
+            cr = CM_Get_DevNode_Registry_PropertyW(current,
+                                                   CM_DRP_DEVICEDESC,
+                                                   NULL,
+                                                   buf,
+                                                   &len,
+                                                   0);
+        }
+
+        if (cr == CR_SUCCESS && (((PWSTR)buf)[0] != L'\0'))
+        {
+            print_indent(level);
+            wide_print((PWSTR)buf);
+            printf("\n");
+        }
+
+        // Go down a level to the first next.
+        cr = CM_Get_Child(&next, current, 0);
+
+        if (cr == CR_SUCCESS)
+        {
+            current = next;
+            level++;
+            continue;
+        }
+
+        // Can't go down any further, go across to the next sibling.  If
+        // there are no more siblings, go back up until there is a sibling.
+        // If we can't go up any further, we're back at the root and we're
+        // done.
+        for (;;)
+        {
+            cr = CM_Get_Sibling(&next, current, 0);
+
+            if (cr == CR_SUCCESS)
+            {
+                current = next;
+                break;
+            }
+
+            cr = CM_Get_Parent(&next, current, 0);
+
+            if (cr == CR_SUCCESS)
+            {
+                current = next;
+                level--;
+            }
+            else
+            {
+                /* Nothing left to do */
+                return;
+            }
+        }
+    }
+}
+
+VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
+                     ULONG Level, BOOLEAN PrintAllChildren)
+{
+    DEVINST    devInst;
+    DEVINST    devInstNext;
+    CONFIGRET  cr;
+    ULONG      walkDone = 0;
+    ULONG      len;
+    TCHAR      buf[MAX_DEVICE_ID_LEN];
 
     // Get Root DevNode
     cr = CM_Locate_DevNode(&devInst, NULL, 0);
 
     if (cr != CR_SUCCESS)
     {
-        return NULL;
+        return;
     }
 
     // Do a depth first search for the DevNode with a matching
@@ -377,28 +469,29 @@ PWSTR DriverNameToDeviceDesc(__in PCTSTR DriverName, BOOLEAN DeviceId)
         {
             len = sizeof(buf) / sizeof(buf[0]);
 
-            if (DeviceId)
-            {
-                cr = CM_Get_Device_ID(devInst, buf, len, 0);
-            }
-            else
-            {
-                cr = CM_Get_DevNode_Registry_PropertyW(devInst,
-                                                       CM_DRP_DEVICEDESC,
-                                                       NULL,
-                                                       buf,
-                                                       &len,
-                                                       0);
-            }
+            cr = CM_Get_DevNode_Registry_PropertyW(devInst,
+                                                   CM_DRP_DEVICEDESC,
+                                                   NULL,
+                                                   buf,
+                                                   &len,
+                                                   0);
+
 
             if (cr == CR_SUCCESS)
             {
-                return (PWSTR)buf;
+                print_indent(Level);
+                printf("[Port %d] ", Index);
+                wide_print((PWSTR)buf);
+                printf("\n");
+
+                if (PrintAllChildren)
+                {
+                    PrintDevinstChildren(devInst, Level);
+                }
             }
-            else
-            {
-                return NULL;
-            }
+
+            // Nothing left to do
+            return;
         }
 
         // This DevNode didn't match, go down a level to the first child.
@@ -437,8 +530,6 @@ PWSTR DriverNameToDeviceDesc(__in PCTSTR DriverName, BOOLEAN DeviceId)
             }
         }
     }
-
-    return NULL;
 }
 
 static VOID
@@ -482,11 +573,9 @@ EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level)
 
             if (driverKeyName)
             {
-                PWSTR deviceDesc = DriverNameToDeviceDesc(driverKeyName, FALSE);
+                PrintDeviceDesc(driverKeyName, index, level,
+                                !connectionInfo.DeviceIsHub);
 
-                print_indent(level);
-                wide_print(deviceDesc);
-                printf("\n");
                 GlobalFree(driverKeyName);
             }
 
