@@ -30,11 +30,10 @@
 #include "USBPcap.h"
 #include "thread.h"
 
-#define BUFFER_SIZE 1023
-
 DWORD WINAPI read_thread(LPVOID param)
 {
     struct thread_data* data = (struct thread_data*)param;
+    unsigned char* buffer;
 
     HANDLE filter_handle = INVALID_HANDLE_VALUE;
     HANDLE write_handle = INVALID_HANDLE_VALUE;
@@ -45,6 +44,14 @@ DWORD WINAPI read_thread(LPVOID param)
     DWORD inBufSize = 0;
     char* outBuf = NULL;
     DWORD outBufSize = 0;
+
+    buffer = malloc(data->bufferlen);
+    if (buffer == NULL)
+    {
+        printf("Failed to allocate user-mode buffer (length %d)\n",
+               data->bufferlen);
+        goto finish;
+    }
 
     if (strncmp("-", data->filename, 2) == 0)
     {
@@ -100,7 +107,7 @@ DWORD WINAPI read_thread(LPVOID param)
         goto finish;
     }
 
-    ((PUSBPCAP_IOCTL_SIZE)inBuf)->size = 1024*1024;
+    ((PUSBPCAP_IOCTL_SIZE)inBuf)->size = data->bufferlen;
 
     if (!DeviceIoControl(filter_handle,
                          IOCTL_USBPCAP_SETUP_BUFFER,
@@ -134,17 +141,21 @@ DWORD WINAPI read_thread(LPVOID param)
 
     for (; data->process == TRUE;)
     {
-        unsigned char buffer[BUFFER_SIZE];
         DWORD read;
         DWORD written;
         DWORD i;
 
-        ReadFile(filter_handle, (PVOID)buffer, BUFFER_SIZE, &read, NULL);
+        ReadFile(filter_handle, (PVOID)buffer, data->bufferlen, &read, NULL);
         WriteFile(write_handle, buffer, read, &written, NULL);
         FlushFileBuffers(write_handle);
     }
 
 finish:
+    if (buffer != NULL)
+    {
+        free(buffer);
+    }
+
     if (write_handle != INVALID_HANDLE_VALUE)
     {
         CloseHandle(write_handle);

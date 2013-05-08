@@ -187,8 +187,8 @@ static UINT32 USBPcapBufferRead(PUSBPCAP_ROOTHUB_DATA pData,
 
     available = USBPcapGetBufferAllocated(pData);
 
-    /* No data to be read */
-    if (available == 0)
+    /* No data to be read or empty destination buffer */
+    if (available == 0 || destBufferSize == 0)
     {
         return available;
     }
@@ -433,12 +433,10 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
-    buffer       = pIrp->AssociatedIrp.SystemBuffer;
-    bufferLength = pStack->Parameters.Read.Length;
-
-    if (bufferLength <= 0)
+    if (pStack->Parameters.Read.Length == 0)
     {
-        return STATUS_INVALID_PARAMETER;
+        *pBytesRead = 0;
+        return STATUS_SUCCESS;
     }
 
     pRootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
@@ -447,6 +445,22 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
     if (pRootData->buffer == NULL)
     {
         return STATUS_UNSUCCESSFUL;
+    }
+
+    /*
+     * Since control device has DO_DIRECT_IO bit set the MDL is already
+     * probed and locked
+     */
+    buffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress,
+                                          NormalPagePriority);
+
+    if (buffer == NULL)
+    {
+        return STATUS_INSUFFICIENT_RESOURCES;
+    }
+    else
+    {
+        bufferLength = MmGetMdlByteCount(pIrp->MdlAddress);
     }
 
     /* Get data from data queue, if there is no data we put
@@ -563,18 +577,43 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
                                   NULL);
         if (pIrp != NULL)
         {
-            UINT32                 bytes;
-            PIO_STACK_LOCATION     pStack = NULL;
+            PVOID   buffer;
+            UINT32  bufferLength;
+            UINT32  bytesRead;
 
-            pStack = IoGetCurrentIrpStackLocation(pIrp);
+            /*
+             * Only IRPs with non-zero buffer are being queued.
+             *
+             * Since control device has DO_DIRECT_IO bit set the MDL is already
+             * probed and locked
+             */
+            buffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress,
+                                                  NormalPagePriority);
 
-            KeAcquireSpinLock(&pRootData->bufferLock, &irql);
-            bytes = USBPcapBufferRead(pRootData,
-                                      pIrp->AssociatedIrp.SystemBuffer,
-                                      pStack->Parameters.Read.Length);
-            KeReleaseSpinLock(&pRootData->bufferLock, irql);
+            if (buffer == NULL)
+            {
+                pIrp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+                bytes = 0;
+            }
+            else
+            {
+                UINT32 bufferLength = MmGetMdlByteCount(pIrp->MdlAddress);
 
-            pIrp->IoStatus.Status = STATUS_SUCCESS;
+                if (bufferLength != 0)
+                {
+                    KeAcquireSpinLock(&pRootData->bufferLock, &irql);
+                    bytes = USBPcapBufferRead(pRootData,
+                                              buffer, bufferLength);
+                    KeReleaseSpinLock(&pRootData->bufferLock, irql);
+                }
+                else
+                {
+                    bytes = 0;
+                }
+
+                pIrp->IoStatus.Status = STATUS_SUCCESS;
+            }
+
             pIrp->IoStatus.Information = (ULONG_PTR) bytes;
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
         }

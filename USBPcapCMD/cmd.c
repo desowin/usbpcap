@@ -36,6 +36,8 @@
 
 #define INPUT_BUFFER_SIZE 1024
 
+#define DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE (1024*1024)
+
 int cmd_interactive(struct thread_data *data)
 {
     int i = 0;
@@ -138,8 +140,9 @@ int __cdecl main(int argc, CHAR **argv)
     data.filename = NULL;
     data.device = NULL;
     data.snaplen = 65535;
+    data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
 
-    while ((c = getopt(argc, argv, "d:o:s:")) != -1)
+    while ((c = getopt(argc, argv, "d:o:s:b:")) != -1)
     {
         switch (c)
         {
@@ -154,6 +157,16 @@ int __cdecl main(int argc, CHAR **argv)
                 if (data.snaplen == 0)
                 {
                     printf("Invalid snapshot length!\n");
+                    return -1;
+                }
+                break;
+            case 'b':
+                data.bufferlen = atol(optarg);
+                /* Minimum buffer size if 4 KiB, maximum 128 MiB */
+                if (data.bufferlen < 4096 || data.bufferlen > 134217728)
+                {
+                    printf("Invalid buffer length! "
+                           "Valid range <4096,134217728>.\n");
                     return -1;
                 }
                 break;

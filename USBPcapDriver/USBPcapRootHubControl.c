@@ -84,7 +84,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
 
     if (NT_SUCCESS(status))
     {
-        controlDevice->Flags |= DO_BUFFERED_IO;
+        controlDevice->Flags |= DO_DIRECT_IO;
 
         status = IoCreateSymbolicLink(&symbolicLinkName, &ntDeviceName);
 

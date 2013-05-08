@@ -33,6 +33,7 @@ struct thread_data
     char *device;   /* Filter device object name */
     char *filename; /* pcap filename */
     UINT32 snaplen; /* Snapshot length */
+    UINT32 bufferlen; /* Internal kernel-mode buffer size */
     volatile BOOL process; /* FALSE if thread should stop */
 };
 
