@@ -138,7 +138,7 @@ USBPcapBufferWriteUnsafe(PUSBPCAP_ROOTHUB_DATA pData,
                       (SIZE_T)tmp);
 
         /* Second copy */
-        RtlCopyMemory(buffer, /* Write at beginning of buffer */
+        RtlCopyMemory(pData->buffer, /* Write at beginning of buffer */
                       (PVOID)&origData[tmp],
                       length - tmp);
 
@@ -433,9 +433,10 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
+    *pBytesRead = 0;
+
     if (pStack->Parameters.Read.Length == 0)
     {
-        *pBytesRead = 0;
         return STATUS_SUCCESS;
     }
 
@@ -518,6 +519,7 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
                                   PVOID buffer)
 {
     UINT32             bytes;
+    UINT32             bytesFree;
     KIRQL              irql;
     NTSTATUS           status;
     PDEVICE_EXTENSION  pControlExt;
@@ -530,6 +532,8 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
 
     bytes = header->headerLen + header->dataLength;
 
+    KeAcquireSpinLock(&pRootData->bufferLock, &irql);
+
     USBPcapInitializePcapHeader(pRootData, &pcapHeader, bytes);
 
     /* pcapHeader.incl_len contains the number of bytes to write */
@@ -537,9 +541,11 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
 
     status = STATUS_SUCCESS;
 
-    KeAcquireSpinLock(&pRootData->bufferLock, &irql);
+    bytesFree = USBPcapGetBufferFree(pRootData);
+
     if ((pRootData->buffer == NULL) ||
-        ((USBPcapGetBufferFree(pRootData) - sizeof(pcaprec_hdr_t)) < bytes))
+        (bytesFree < sizeof(pcaprec_hdr_t)) ||
+        ((bytesFree - sizeof(pcaprec_hdr_t)) < bytes))
     {
         DkDbgStr("No enough free space left.");
         status = STATUS_INSUFFICIENT_RESOURCES;
@@ -555,9 +561,12 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
 
         /* Write USBPCAP_BUFFER_PACKET_HEADER */
         tmp = min(bytes, (UINT32)header->headerLen);
-        USBPcapBufferWriteUnsafe(pRootData,
-                                 (PVOID) header,
-                                 tmp);
+        if (tmp > 0)
+        {
+            USBPcapBufferWriteUnsafe(pRootData,
+                                     (PVOID) header,
+                                     tmp);
+        }
         bytes -= tmp;
 
         if (bytes > 0 && header->dataLength > 0)

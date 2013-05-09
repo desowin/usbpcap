@@ -145,9 +145,11 @@ DWORD WINAPI read_thread(LPVOID param)
         DWORD written;
         DWORD i;
 
-        ReadFile(filter_handle, (PVOID)buffer, data->bufferlen, &read, NULL);
-        WriteFile(write_handle, buffer, read, &written, NULL);
-        FlushFileBuffers(write_handle);
+        if (ReadFile(filter_handle, (PVOID)buffer, data->bufferlen, &read, NULL))
+        {
+            WriteFile(write_handle, buffer, read, &written, NULL);
+            FlushFileBuffers(write_handle);
+        }
     }
 
 finish:
