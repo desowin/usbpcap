@@ -37,23 +37,23 @@ NTSTATUS DkPower(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     switch (pStack->MinorFunction)
     {
         case IRP_MN_POWER_SEQUENCE:
-            KdPrint(("DkSysPort, %s(): %s -> IRP_MN_POWER_SEQUENCE", __FUNCTION__, pTmp));
+            KdPrint(("USBPcap, %s(): %s -> IRP_MN_POWER_SEQUENCE\n", __FUNCTION__, pTmp));
             break;
 
         case IRP_MN_QUERY_POWER:
-            KdPrint(("DkSysPort, %s(): %s -> IRP_MN_QUERY_POWER", __FUNCTION__, pTmp));
+            KdPrint(("USBPcap, %s(): %s -> IRP_MN_QUERY_POWER\n", __FUNCTION__, pTmp));
             break;
 
         case IRP_MN_SET_POWER:
-            KdPrint(("DkSysPort, %s(): %s -> IRP_MN_SET_POWER", __FUNCTION__, pTmp));
+            KdPrint(("USBPcap, %s(): %s -> IRP_MN_SET_POWER\n", __FUNCTION__, pTmp));
             break;
 
         case IRP_MN_WAIT_WAKE:
-            KdPrint(("DkSysPort, %s(): %s -> IRP_MN_WAIT_WAKE", __FUNCTION__, pTmp));
+            KdPrint(("USBPcap, %s(): %s -> IRP_MN_WAIT_WAKE\n", __FUNCTION__, pTmp));
             break;
 
         default:
-            KdPrint(("DkSysPort, %s(): %s -> IRP_MN_XXX (0x%X)", __FUNCTION__, pTmp, pStack->MinorFunction));
+            KdPrint(("USBPcap, %s(): %s -> IRP_MN_XXX (0x%X)\n", __FUNCTION__, pTmp, pStack->MinorFunction));
             break;
     }
 

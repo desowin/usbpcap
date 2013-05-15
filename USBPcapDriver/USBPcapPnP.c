@@ -60,8 +60,8 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
             DkDbgStr("IRP_MN_START_DEVICE");
 
             ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
-            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
             return ntStat;
 
@@ -80,7 +80,6 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
                 USBPcapDeleteRootHubControlDevice(pDeviceData->pRootData->controlDevice);
             }
 
-            IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             IoReleaseRemoveLockAndWait(&pDevExt->removeLock, (PVOID) pIrp);
 
             DkDetachAndDeleteHubFilt(pDevExt);
@@ -129,7 +128,6 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
             DkDbgStr("IRP_MN_START_DEVICE");
 
             ntStat = DkForwardAndWait(pDevExt->pNextDevObj, pIrp);
-            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 
             if (NT_SUCCESS(USBPcapGetDeviceUSBInfo(pDevExt)))
@@ -140,6 +138,7 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
             {
                 DkDbgStr("Failed to get info of started device");
             }
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
             return ntStat;
 
         case IRP_MN_QUERY_DEVICE_RELATIONS:
@@ -293,9 +292,9 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
                 }
             }
 
-            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
-
             IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+
+            IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
             return ntStat;
 
