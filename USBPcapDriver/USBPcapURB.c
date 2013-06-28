@@ -93,11 +93,11 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
     PUSBD_INTERFACE_INFORMATION pInformation = pInterface;
 
     /*
-     * * Iterate over all interfaces in search for pipe handles
-     * * Add endpoint information to enpoint table
+     * Iterate over all interfaces in search for pipe handles
+     * Add endpoint information to endpoint table
      */
     i = 0;
-    while (interfaces_len > 0)
+    while (interfaces_len != 0 && pInterface->Length != 0)
     {
         PUSBD_PIPE_INFORMATION Pipe = pInterface->Pipes;
         KdPrint(("Interface %d Len: %d Class: %02x Subclass: %02x"
@@ -128,6 +128,11 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
 
         /* Advance to next interface */
         i++;
+        if (pInterface->Length >= interfaces_len)
+        {
+            /* There is no next interface, don't try to parse it. */
+            break;
+        }
         interfaces_len -= pInterface->Length;
         pInterface = (PUSBD_INTERFACE_INFORMATION)
                          ((PUCHAR)pInterface + pInterface->Length);
@@ -246,16 +251,20 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             DkDbgStr("URB_FUNCTION_SELECT_CONFIGURATION");
             pSelectConfiguration = (struct _URB_SELECT_CONFIGURATION*)pUrb;
 
-            /* Calculate interfaces length */
-            interfaces_len = pUrb->UrbHeader.Length;
-            interfaces_len -= offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
+            /* Check if there is interface information in the URB */
+            if (pUrb->UrbHeader.Length > offsetof(struct _URB_SELECT_CONFIGURATION, Interface))
+            {
+                /* Calculate interfaces length */
+                interfaces_len = pUrb->UrbHeader.Length;
+                interfaces_len -= offsetof(struct _URB_SELECT_CONFIGURATION, Interface);
 
-            KdPrint(("Header Len: %d Interfaces_len: %d\n",
-                    pUrb->UrbHeader.Length, interfaces_len));
+                KdPrint(("Header Len: %d Interfaces_len: %d\n",
+                        pUrb->UrbHeader.Length, interfaces_len));
 
-            USBPcapParseInterfaceInformation(pDeviceData,
-                                             &pSelectConfiguration->Interface,
-                                             interfaces_len);
+                USBPcapParseInterfaceInformation(pDeviceData,
+                                                 &pSelectConfiguration->Interface,
+                                                 interfaces_len);
+            }
 
             /* Store the configuration information for later use */
             if (pDeviceData->descriptor != NULL)
@@ -300,16 +309,20 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             DkDbgStr("URB_FUNCTION_SELECT_INTERFACE");
             pSelectInterface = (struct _URB_SELECT_INTERFACE*)pUrb;
 
-            /* Calculate interfaces length */
-            interfaces_len = pUrb->UrbHeader.Length;
-            interfaces_len -= offsetof(struct _URB_SELECT_INTERFACE, Interface);
+            /* Check if there is interface information in the URB */
+            if (pUrb->UrbHeader.Length > offsetof(struct _URB_SELECT_INTERFACE, Interface))
+            {
+                /* Calculate interfaces length */
+                interfaces_len = pUrb->UrbHeader.Length;
+                interfaces_len -= offsetof(struct _URB_SELECT_INTERFACE, Interface);
 
-            KdPrint(("Header Len: %d Interfaces_len: %d\n",
-                    pUrb->UrbHeader.Length, interfaces_len));
+                KdPrint(("Header Len: %d Interfaces_len: %d\n",
+                        pUrb->UrbHeader.Length, interfaces_len));
 
-            USBPcapParseInterfaceInformation(pDeviceData,
-                                             &pSelectInterface->Interface,
-                                             interfaces_len);
+                USBPcapParseInterfaceInformation(pDeviceData,
+                                                 &pSelectInterface->Interface,
+                                                 interfaces_len);
+            }
             break;
         }
 
