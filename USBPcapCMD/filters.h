@@ -37,4 +37,6 @@ extern struct filters **usbpcapFilters;
 void filters_initialize();
 void filters_free();
 
+BOOL is_usbpcap_upper_filter_installed();
+
 #endif /* USBPCAP_CMD_FILTERS_H */

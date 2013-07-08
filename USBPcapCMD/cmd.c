@@ -23,16 +23,20 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#include <initguid.h>
 #include <windows.h>
 #include <winioctl.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <Shlwapi.h>
+#include <Usbiodef.h>
 #include "filters.h"
 #include "thread.h"
 #include "USBPcap.h"
 #include "enum.h"
 #include "getopt.h"
+#include "roothubs.h"
+
 
 #define INPUT_BUFFER_SIZE 1024
 
@@ -50,7 +54,51 @@ int cmd_interactive(struct thread_data *data)
     data->filename = NULL;
 
     filters_initialize();
-    printf("Following filter control device are available:\n");
+    if (usbpcapFilters[0] == NULL)
+    {
+        printf("No filter control devices are available.\n");
+
+        if (is_usbpcap_upper_filter_installed() == FALSE)
+        {
+            printf("Please reinstall USBPcapDriver.\n");
+            (void)getchar();
+            filters_free();
+            return -1;
+        }
+
+        printf("USBPcap UpperFilter entry appears to be present.\n"
+               "Most likely you have not restarted your computer after installation.\n"
+               "It is possible to restart all USB devices to get USBPcap working without reboot.\n"
+               "\nWARNING:\n  Restarting all USB devices can result in data loss.\n"
+               "  If you are unsure please answer 'n' and reboot in order to use USBPcap.\n\n");
+
+        finished = FALSE;
+        do
+        {
+            printf("Do you want to restart all USB devices (y, n)? ");
+            if (fgets(buffer, INPUT_BUFFER_SIZE, stdin) == NULL)
+            {
+                printf("Invalid input\n");
+            }
+            else
+            {
+                if (buffer[0] == 'y')
+                {
+                    finished = TRUE;
+                    restart_all_usb_devices();
+                    filters_free();
+                    filters_initialize();
+                }
+                else if (buffer[0] == 'n')
+                {
+                    filters_free();
+                    return -1;
+                }
+            }
+        } while (finished == FALSE);
+    }
+
+    printf("Following filter control devices are available:\n");
     while (usbpcapFilters[i] != NULL)
     {
         printf("%d %s\n", i+1, usbpcapFilters[i]->device);
@@ -123,7 +171,6 @@ int cmd_interactive(struct thread_data *data)
             data->filename = _strdup(buffer);
             finished = TRUE;
         }
-
     } while (finished == FALSE);
 
     return 0;
@@ -142,7 +189,7 @@ int __cdecl main(int argc, CHAR **argv)
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
 
-    while ((c = getopt(argc, argv, "d:o:s:b:")) != -1)
+    while ((c = getopt(argc, argv, "d:o:s:b:I")) != -1)
     {
         switch (c)
         {
@@ -170,6 +217,9 @@ int __cdecl main(int argc, CHAR **argv)
                     return -1;
                 }
                 break;
+            case 'I':
+                init_non_standard_roothub_hwid();
+                return 0;
             default:
                 break;
         }

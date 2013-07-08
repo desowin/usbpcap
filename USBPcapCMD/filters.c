@@ -333,3 +333,87 @@ void filters_free()
     free(usbpcapFilters);
 }
 
+BOOL is_usbpcap_upper_filter_installed()
+{
+    LONG regVal;
+    HKEY hkey;
+    LONG length;
+    DWORD type;
+    LPTSTR multisz;
+
+    PTSTR lookup = _T("\0USBPcap\0");
+    int i, j;
+
+    regVal = RegOpenKeyEx(HKEY_LOCAL_MACHINE,
+                          _T("System\\CurrentControlSet\\Control\\Class\\{36FC9E60-C465-11CF-8056-444553540000}"),
+                          0, KEY_QUERY_VALUE, &hkey);
+
+    if (regVal != ERROR_SUCCESS)
+    {
+        printf("Failed to open USB Class registry key! Code %d\n", regVal);
+        return FALSE;
+    }
+
+    regVal = RegQueryValueEx(hkey, _T("UpperFilters"),
+                             NULL, &type, NULL, &length);
+
+    if (regVal != ERROR_SUCCESS)
+    {
+        printf("Failed to query UpperFilters value size! Code %d\n", regVal);
+        RegCloseKey(hkey);
+        return FALSE;
+    }
+
+    if (type != REG_MULTI_SZ)
+    {
+        printf("Invalid UpperFilters type (%d)!\n", type);
+        RegCloseKey(hkey);
+        return FALSE;
+    }
+
+    if (length <= 0)
+    {
+        RegCloseKey(hkey);
+        return FALSE;
+    }
+
+    multisz = (LPTSTR)malloc(length);
+    regVal = RegQueryValueEx(hkey, _T("UpperFilters"),
+                             NULL, NULL, multisz, &length);
+
+    if (regVal != ERROR_SUCCESS)
+    {
+        printf("Failed to read UpperFilters value! Code %d\n", regVal);
+        free(multisz);
+        RegCloseKey(hkey);
+        return FALSE;
+    }
+
+    RegCloseKey(hkey);
+
+    /* i walks over multisz, j walks over lookup.
+     * j starts from 1 as the multisz does not start with '\0'.
+     */
+    for (i = 0, j = 1; i < length; i++)
+    {
+        if (multisz[i] == lookup[j])
+        {
+            j++;
+            if (j == 9) /* whole lookup string */
+            {
+                free(multisz);
+                return TRUE;
+            }
+        }
+        else
+        {
+            /* when first character does not match start searching from
+             * beginning (including '\0' as it has to be new substring)
+             */
+            j = 0;
+        }
+    }
+
+    free(multisz);
+    return FALSE;
+}
