@@ -719,6 +719,88 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
     return status;
 }
 
+static RTL_QUERY_REGISTRY_ROUTINE QueryCompareHwid;
+
+static NTSTATUS QueryCompareHwid(PWSTR ValueName, ULONG ValueType,
+                                 PVOID ValueData, ULONG ValueLength,
+                                 PVOID Context, PVOID EntryContext)
+{
+    PBOOLEAN match;
+    PWSTR hwid;
+
+    if ((Context == NULL) || (EntryContext == NULL))
+    {
+        DkDbgStr("NULL context in registry callback!");
+        return STATUS_SUCCESS;
+    }
+
+    match = (PBOOLEAN)Context;
+    hwid = (PWSTR)EntryContext;
+
+    /* Do not compare if the string was already matched. */
+    if (*match == TRUE)
+    {
+        return STATUS_SUCCESS;
+    }
+
+    if (ValueLength == sizeof(WCHAR))
+    {
+        DkDbgStr("NULL string value in registry callback!");
+        return STATUS_SUCCESS;
+    }
+
+    /* RtlQueryRegistryValues should break REG_MULTI_SZ into REG_SZ */
+    if (ValueType != REG_SZ)
+    {
+        DkDbgVal("Invalid value type!", ValueType);
+        return STATUS_SUCCESS;
+    }
+
+    if (wcscmp((PWSTR)ValueData, hwid) == 0)
+    {
+        *match = TRUE;
+    }
+
+    return STATUS_SUCCESS;
+}
+
+/*
+ * Checks if given Hardware ID is listed in NonStandardHWIDs registry entry.
+ *
+ * Returns TRUE if hwid is in the list, FALSE otherwise.
+ */
+__drv_requiresIRQL(PASSIVE_LEVEL)
+static BOOLEAN IsHwidNonStandardRootHub(PWSTR hwid)
+{
+    RTL_QUERY_REGISTRY_TABLE table[2];
+    NTSTATUS status;
+    BOOLEAN match = FALSE;
+
+    table[0].QueryRoutine = QueryCompareHwid;
+    table[0].Flags = RTL_QUERY_REGISTRY_REQUIRED;
+    table[0].Name = L"NonStandardHWIDs";
+    table[0].EntryContext = (PVOID)hwid;
+    table[0].DefaultType = REG_NONE;
+    table[0].DefaultData = NULL;
+    table[0].DefaultLength = 0;
+
+    /* NULL-terminate the table */
+    memset(&table[1], 0, sizeof(RTL_QUERY_REGISTRY_TABLE));
+
+    status = RtlQueryRegistryValues(RTL_REGISTRY_SERVICES,
+                                    L"USBPcap",
+                                    table,
+                                    (PVOID)&match,
+                                    NULL);
+
+    if (NT_SUCCESS(status))
+    {
+        return match;
+    }
+
+    return FALSE;
+}
+
 #define REGSTR_VAL_MAX_HCID_LEN 1024
 #define MAX_HARDWARE_IDS 64
 
@@ -820,6 +902,12 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
         else if (wcscmp(hardwareIds[id], L"USB\\ROOT_HUB20") == 0)
         {
             DkDbgStr("Device is USB\\ROOT_HUB20");
+            found = TRUE;
+            break;
+        }
+        else if (IsHwidNonStandardRootHub(hardwareIds[id]) == TRUE)
+        {
+            DkDbgStr("Device HWID is in NonStandardHWIDs list");
             found = TRUE;
             break;
         }
