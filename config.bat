@@ -15,4 +15,4 @@ set _USBPCAP_SIGN_OPTS=sign /f %~dp0certificates\USBPcapTestCert.pfx /t http://t
 ::_USBPCAP_VERSION specifies version of the installer.
 ::To update driver version edit USBPcapDriver\USBPcap.rc and
 ::USBPcapDriver\SOURCES
-set _USBPCAP_VERSION="1.0.0.4"
+set _USBPCAP_VERSION="1.0.0.5"
