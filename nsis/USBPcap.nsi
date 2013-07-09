@@ -128,7 +128,7 @@ FunctionEnd
 InstType "Full"
 InstType "Minimal"
 
-Section "USBPcap Driver"
+Section "USBPcap Driver" SEC_USBPCAPDRIVER
   SectionIn RO
   SetOutPath "$INSTDIR"
 
@@ -196,8 +196,8 @@ Section "USBPcap Driver"
 !endif
 SectionEnd
 
-Section "USBPcapCMD"
-  SectionIn 1
+Section "USBPcapCMD" SEC_USBPCAPCMD
+  SectionIn 1 RO
   SetOutPath "$INSTDIR"
 
   ${If} ${RunningX64}
@@ -206,6 +206,21 @@ Section "USBPcapCMD"
     File /oname=USBPcapCMD.exe "..\Release\USBPcapCMD_x86.exe"
   ${EndIf}
 SectionEnd
+
+Section "Detect USB 3.0" SEC_USB3
+  SectionIn 1
+
+  Exec '"$INSTDIR\USBPcapCMD.exe" -I'
+SectionEnd
+
+Function .onSelChange
+${If} ${SectionIsSelected} ${SEC_USB3}
+  !insertmacro SetSectionFlag ${SEC_USBPCAPCMD} ${SF_RO}
+  !insertmacro SelectSection ${SEC_USBPCAPCMD}
+${Else}
+  !insertmacro ClearSectionFlag ${SEC_USBPCAPCMD} ${SF_RO}
+${EndIf}
+FunctionEnd
 
 !ifdef INNER
 Section "Uninstall"
