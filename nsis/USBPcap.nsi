@@ -81,6 +81,9 @@ Function .onInit
   ReadRegStr $R0 HKLM \
   "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
   "UninstallString"
+  ${If} ${RunningX64}
+    ${EnableX64FSRedirection}
+  ${EndIf}
   StrCmp $R0 "" done
 
   MessageBox MB_OK|MB_ICONEXCLAMATION \
@@ -91,15 +94,27 @@ done:
   Push $R0
   ${GetWindowsVersion} $R0
 
-  ${Select} $R0
-    ${Case} "XP"
-    ${Case} "Vista"
-    ${Case} "7"
-    ${Case} "8"
-    ${CaseElse}
-      MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
-      Quit
-  ${EndSelect}
+  ${If} ${RunningX64}
+    ${Select} $R0
+      ${Case} "2003" ; 64-bit XP
+      ${Case} "Vista"
+      ${Case} "7"
+      ${Case} "8"
+      ${CaseElse}
+        MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
+        Quit
+    ${EndSelect}
+  ${Else}
+    ${Select} $R0
+      ${Case} "XP"
+      ${Case} "Vista"
+      ${Case} "7"
+      ${Case} "8"
+      ${CaseElse}
+        MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
+        Quit
+    ${EndSelect}
+  ${EndIf}
 
   ${If} ${RunningX64}
     StrCpy $INSTDIR "$PROGRAMFILES64\USBPcap"
@@ -129,50 +144,51 @@ Section "USBPcap Driver"
                    "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
 
   ${GetWindowsVersion} $R0
-  ${Select} $R0
-    ${Case} "XP"
-      ${If} ${RunningX64}
+  ${If} ${RunningX64}
+    ${Select} $R0
+      ${Case} "2003" ; 64-bit XP
         File "..\Release\XP\x64\USBPcap.inf"
         File "..\Release\XP\x64\USBPcap.sys"
         File "..\Release\XP\x64\USBPcapamd64.cat"
-      ${Else}
-        File "..\Release\XP\x86\USBPcap.inf"
-        File "..\Release\XP\x86\USBPcap.sys"
-        File "..\Release\XP\x86\USBPcapx86.cat"
-      ${EndIf}
-    ${Case} "Vista"
-      ${If} ${RunningX64}
+      ${Case} "Vista"
         File "..\Release\Vista\x64\USBPcap.inf"
         File "..\Release\Vista\x64\USBPcap.sys"
         File "..\Release\Vista\x64\USBPcapamd64.cat"
-      ${Else}
-        File "..\Release\Vista\x86\USBPcap.inf"
-        File "..\Release\Vista\x86\USBPcap.sys"
-        File "..\Release\Vista\x86\USBPcapx86.cat"
-      ${EndIf}
-    ${Case} "7"
-      ${If} ${RunningX64}
+      ${Case} "7"
         File "..\Release\Windows7\x64\USBPcap.inf"
         File "..\Release\Windows7\x64\USBPcap.sys"
         File "..\Release\Windows7\x64\USBPcapamd64.cat"
-      ${Else}
-        File "..\Release\Windows7\x86\USBPcap.inf"
-        File "..\Release\Windows7\x86\USBPcap.sys"
-        File "..\Release\Windows7\x86\USBPcapx86.cat"
-      ${EndIf}
-    ${Case} "8"
-      ${If} ${RunningX64}
+      ${Case} "8"
         File "..\Release\Windows8\x64\USBPcap.inf"
         File "..\Release\Windows8\x64\USBPcap.sys"
         File "..\Release\Windows8\x64\USBPcapamd64.cat"
-      ${Else}
+    ${EndSelect}
+  ${Else}
+    ${Select} $R0
+      ${Case} "XP"
+        File "..\Release\XP\x86\USBPcap.inf"
+        File "..\Release\XP\x86\USBPcap.sys"
+        File "..\Release\XP\x86\USBPcapx86.cat"
+      ${Case} "Vista"
+        File "..\Release\Vista\x86\USBPcap.inf"
+        File "..\Release\Vista\x86\USBPcap.sys"
+        File "..\Release\Vista\x86\USBPcapx86.cat"
+      ${Case} "7"
+        File "..\Release\Windows7\x86\USBPcap.inf"
+        File "..\Release\Windows7\x86\USBPcap.sys"
+        File "..\Release\Windows7\x86\USBPcapx86.cat"
+      ${Case} "8"
         File "..\Release\Windows8\x86\USBPcap.inf"
         File "..\Release\Windows8\x86\USBPcap.sys"
         File "..\Release\Windows8\x86\USBPcapx86.cat"
-      ${EndIf}
-  ${EndSelect}
+    ${EndSelect}
+  ${EndIf}
+
 
   ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf'
+  ${If} ${RunningX64}
+    ${EnableX64FSRedirection}
+  ${EndIf}
 
 !ifndef INNER
   ; this packages the signed uninstaller
@@ -216,6 +232,9 @@ Section "Uninstall"
   RMDir /R /REBOOTOK $INSTDIR
 
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap"
+  ${If} ${RunningX64}
+    ${EnableX64FSRedirection}
+  ${EndIf}
 SectionEnd
 !endif
 
