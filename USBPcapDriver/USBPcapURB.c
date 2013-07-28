@@ -90,7 +90,6 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
 {
     ULONG i, j;
     KIRQL irql;
-    PUSBD_INTERFACE_INFORMATION pInformation = pInterface;
 
     /*
      * Iterate over all interfaces in search for pipe handles
@@ -100,6 +99,49 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
     while (interfaces_len != 0 && pInterface->Length != 0)
     {
         PUSBD_PIPE_INFORMATION Pipe = pInterface->Pipes;
+
+        if (interfaces_len < sizeof(USBD_INTERFACE_INFORMATION))
+        {
+            /* There is no enough bytes to hold USBD_INTERFACE_INFORMATION.
+             * Stop parsing.
+             */
+            KdPrint(("Remaining %d bytes of interfaces not parsed.\n",
+                     interfaces_len));
+            break;
+        }
+
+        if (pInterface->Length > interfaces_len)
+        {
+            /* Interface expands beyond URB, don't try to parse it. */
+            KdPrint(("Interface length: %d. Remaining bytes: %d. "
+                     "Parsing stopped.\n",
+                     pInterface->Length, interfaces_len));
+            break;
+        }
+
+        /* At this point if NumberOfPipes is either 0 or 1 we can proceed
+         * as sizeof(USBD_INTERFACE_INFORMATION) covers interface
+         * information together with one pipe information.
+         *
+         * Perform additional sanity check if there is more than one pipe in
+         * the interface.
+         */
+        if (pInterface->NumberOfPipes > 1)
+        {
+            ULONG required_length;
+            required_length = sizeof(USBD_INTERFACE_INFORMATION) +
+                              ((pInterface->NumberOfPipes - 1) *
+                               sizeof(USBD_PIPE_INFORMATION));
+
+            if (interfaces_len < required_length)
+            {
+                KdPrint(("%d pipe information does not fit in %d bytes.",
+                         pInterface->NumberOfPipes, interfaces_len));
+                break;
+            }
+        }
+
+        /* End of sanity checks, parse pipe information. */
         KdPrint(("Interface %d Len: %d Class: %02x Subclass: %02x"
                  "Protocol: %02x Number of Pipes: %d\n",
                  i, pInterface->Length, pInterface->Class,
@@ -128,11 +170,6 @@ USBPcapParseInterfaceInformation(PUSBPCAP_DEVICE_DATA pDeviceData,
 
         /* Advance to next interface */
         i++;
-        if (pInterface->Length >= interfaces_len)
-        {
-            /* There is no next interface, don't try to parse it. */
-            break;
-        }
         interfaces_len -= pInterface->Length;
         pInterface = (PUSBD_INTERFACE_INFORMATION)
                          ((PUCHAR)pInterface + pInterface->Length);
