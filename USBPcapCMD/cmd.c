@@ -234,13 +234,13 @@ int __cdecl main(int argc, CHAR **argv)
         interactive = TRUE;
         if (data.filename != NULL)
         {
-            LocalFree(data.filename);
+            free(data.filename);
             data.filename = NULL;
         }
 
         if (data.device != NULL)
         {
-            LocalFree(data.device);
+            free(data.device);
             data.device = NULL;
         }
 
@@ -285,12 +285,12 @@ int __cdecl main(int argc, CHAR **argv)
 
     if (data.device != NULL)
     {
-        LocalFree(data.device);
+        free(data.device);
     }
 
     if (data.filename != NULL)
     {
-        LocalFree(data.filename);
+        free(data.filename);
     }
 
     return 0;
