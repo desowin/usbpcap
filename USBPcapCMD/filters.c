@@ -179,12 +179,19 @@ static BOOL find_usbpcap_filters(struct list *list,
                                            0,
                                            BUFFER_SIZE);
 
+    if (info == NULL)
+    {
+        printf("HeapAlloc() failed\n");
+        return FALSE;
+    }
+
     status = NtOpenDirectoryObject(&handle,
                                    DIRECTORY_QUERY,
                                    &attr);
     if (status != 0)
     {
         printf("NtOpenDirectoryObject() failed\n");
+        HeapFree(GetProcessHeap(), 0, info);
         return FALSE;
     }
 
@@ -199,6 +206,7 @@ static BOOL find_usbpcap_filters(struct list *list,
     if (status != 0)
     {
         printf("NtQueryDirectoryObject() failed\n");
+        HeapFree(GetProcessHeap(), 0, info);
         return FALSE;
     }
 
@@ -215,6 +223,7 @@ static BOOL find_usbpcap_filters(struct list *list,
     }
 
     NtClose(handle);
+    HeapFree(GetProcessHeap(), 0, info);
 
     return TRUE;
 }
