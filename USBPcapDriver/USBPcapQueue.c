@@ -7,10 +7,6 @@ VOID DkCsqInsertIrp(__in PIO_CSQ pCsq, __in PIRP pIrp)
 
     pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
                                 context.control.ioCsq);
-    if (pDevExt == NULL)
-    {
-        return;
-    }
 
     ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
@@ -36,10 +32,6 @@ PIRP DkCsqPeekNextIrp(__in PIO_CSQ pCsq, __in PIRP pIrp, __in PVOID pCtx)
 
     pDevExt = CONTAINING_RECORD(pCsq, DEVICE_EXTENSION,
                                 context.control.ioCsq);
-    if (pDevExt == NULL)
-    {
-        return NULL;
-    }
 
     ASSERT(pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL);
 
