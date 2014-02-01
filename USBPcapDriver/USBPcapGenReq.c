@@ -77,7 +77,6 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     NTSTATUS            ntStat = STATUS_SUCCESS;
     PDEVICE_EXTENSION   pDevExt = NULL;
     PIO_STACK_LOCATION  pStack = NULL;
-    PDEVICE_OBJECT      pNextDevObj = NULL;
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
     ntStat = IoAcquireRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
@@ -95,7 +94,7 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         // Handling Read/Write request for Hub Filter object and
         // target devices
         IoSkipCurrentIrpStackLocation(pIrp);
-        ntStat = IoCallDriver(pNextDevObj, pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
     }
     else if (pDevExt->deviceMagic == USBPCAP_MAGIC_CONTROL)
     {
