@@ -421,7 +421,7 @@ NTSTATUS USBPcapGetTargetDevicePort(PDEVICE_OBJECT parent,
     NTSTATUS                             status;
     ULONG                                maxIndex;
     ULONG                                idx;
-    PWCHAR                               pdo_driverkey;
+    PWCHAR                               pdo_driverkey = NULL;
     UNICODE_STRING                       pdo_str;
     PUSB_NODE_CONNECTION_DRIVERKEY_NAME  pname;
     BOOLEAN                              found;
