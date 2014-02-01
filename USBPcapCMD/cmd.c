@@ -285,7 +285,7 @@ int __cdecl main(int argc, CHAR **argv)
 
     if (data.device != NULL)
     {
-        LocalFree(data.filename);
+        LocalFree(data.device);
     }
 
     if (data.filename != NULL)
