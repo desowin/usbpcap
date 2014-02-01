@@ -314,6 +314,7 @@ NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
         if (allocated >= bytes)
         {
             status = STATUS_BUFFER_TOO_SMALL;
+            ExFreePool(buffer);
         }
         else
         {
