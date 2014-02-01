@@ -42,8 +42,6 @@ DWORD WINAPI read_thread(LPVOID param)
 
     char* inBuf = NULL;
     DWORD inBufSize = 0;
-    char* outBuf = NULL;
-    DWORD outBufSize = 0;
 
     buffer = malloc(data->bufferlen);
     if (buffer == NULL)
@@ -96,8 +94,8 @@ DWORD WINAPI read_thread(LPVOID param)
                          IOCTL_USBPCAP_SET_SNAPLEN_SIZE,
                          inBuf,
                          inBufSize,
-                         outBuf,
-                         outBufSize,
+                         NULL,
+                         0,
                          &bytes_ret,
                          0))
     {
@@ -113,8 +111,8 @@ DWORD WINAPI read_thread(LPVOID param)
                          IOCTL_USBPCAP_SETUP_BUFFER,
                          inBuf,
                          inBufSize,
-                         outBuf,
-                         outBufSize,
+                         NULL,
+                         0,
                          &bytes_ret,
                          0))
     {
@@ -128,8 +126,8 @@ DWORD WINAPI read_thread(LPVOID param)
                          IOCTL_USBPCAP_START_FILTERING,
                          inBuf,
                          inBufSize,
-                         outBuf,
-                         outBufSize,
+                         NULL,
+                         0,
                          &bytes_ret,
                          0))
     {
@@ -170,9 +168,6 @@ finish:
 
     if (inBuf != NULL)
         free(inBuf);
-
-    if (outBuf != NULL)
-        free(outBuf);
 
     return 0;
 }
