@@ -127,7 +127,7 @@ int cmd_interactive(struct thread_data *data)
             {
                 int value = atoi(buffer);
 
-                if (value == 0 || value > max_i)
+                if (value <= 0 || value > max_i)
                 {
                     printf("Invalid input\n");
                 }
