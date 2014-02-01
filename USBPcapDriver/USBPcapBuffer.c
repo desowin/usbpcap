@@ -540,6 +540,14 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
     /* pcapHeader.incl_len contains the number of bytes to write */
     bytes = pcapHeader.incl_len;
 
+    /* Sanity check buffer */
+    if ((bytes > sizeof(pcaprec_hdr_t) + header->headerLen) &&
+        buffer == NULL)
+    {
+        DkDbgStr("Attempted to write invalid packet.");
+        return STATUS_INVALID_PARAMETER;
+    }
+
     status = STATUS_SUCCESS;
 
     bytesFree = USBPcapGetBufferFree(pRootData);
@@ -570,7 +578,7 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
         }
         bytes -= tmp;
 
-        if (bytes > 0 && header->dataLength > 0)
+        if (buffer != NULL && bytes > 0 && header->dataLength > 0)
         {
             /* Write data */
             tmp = min(bytes, header->dataLength);
