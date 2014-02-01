@@ -111,6 +111,13 @@ static void EnumerateHub(PTSTR hub,
 
 static void print_indent(ULONG level)
 {
+    /* Sanity check level to avoid printing a lot of spaces */
+    if (level > 20)
+    {
+        printf("*** Warning: Device tree might be incorrectly formatted. ***\n");
+        return;
+    }
+
     while (level > 0)
     {
         /* Print two spaces per level */
@@ -423,6 +430,11 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
             {
                 current = next;
                 level--;
+                if (current == parent || level == indent)
+                {
+                    /* We went back to the parent, explicitly return here */
+                    return;
+                }
             }
             else
             {
