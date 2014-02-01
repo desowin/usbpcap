@@ -319,6 +319,12 @@ NTSTATUS DkCreateAndAttachTgt(PDEVICE_EXTENSION pParentDevExt, PDEVICE_OBJECT pT
         return ntStat;
     }
 
+    if (pDeviceObject == NULL)
+    {
+        DkDbgStr("IoCreateDevice() succeeded but pDeviceObject was not set.");
+        return ntStat;
+    }
+
     pDevExt = (PDEVICE_EXTENSION) pDeviceObject->DeviceExtension;
     pDevExt->deviceMagic = USBPCAP_MAGIC_DEVICE;
     pDevExt->pThisDevObj = pDeviceObject;
