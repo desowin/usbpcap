@@ -58,7 +58,6 @@ NTSTATUS DkDefault(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 {
     NTSTATUS            ntStat = STATUS_SUCCESS;
     PDEVICE_EXTENSION   pDevExt = NULL;
-    PIO_STACK_LOCATION  pStack = NULL;
     PDEVICE_OBJECT      pNextDevObj = NULL;
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
@@ -71,9 +70,14 @@ NTSTATUS DkDefault(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         return ntStat;
     }
 
-    pStack = IoGetCurrentIrpStackLocation(pIrp);
+#if DBG
+    {
+        PIO_STACK_LOCATION pStack;
+        pStack = IoGetCurrentIrpStackLocation(pIrp);
+        DkDbgVal("DkDefault", pStack->MajorFunction);
+    }
+#endif
 
-    DkDbgVal("DkDefault", pStack->MajorFunction);
     pNextDevObj = pDevExt->pNextDevObj;
 
     IoSkipCurrentIrpStackLocation(pIrp);
