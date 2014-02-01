@@ -693,10 +693,6 @@ static void EnumerateHub(PTSTR hub,
                       hubInfo->u.HubInformation.HubDescriptor.bNumberOfPorts,
                       level);
 
-
-    CloseHandle(hHubDevice);
-    return;
-
 EnumerateHubError:
     // Clean up any stuff that got allocated
 
