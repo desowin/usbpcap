@@ -99,11 +99,17 @@ typedef NTSTATUS (WINAPI* NTOPENDIRECTORYOBJECT)(HANDLE*,
 
 typedef NTSTATUS (WINAPI* NTCLOSE)(HANDLE);
 
+static HMODULE ntdll_handle;
 NTQUERYDIRECTORYOBJECT  NtQueryDirectoryObject;
 NTOPENDIRECTORYOBJECT   NtOpenDirectoryObject;
 NTCLOSE                 NtClose;
 
 #define DIRECTORY_QUERY 0x0001
+
+static void __cdecl unload_undocumented(void)
+{
+    FreeLibrary(ntdll_handle);
+}
 
 /* Initialize handles to undocumented functions
  *
@@ -111,12 +117,14 @@ NTCLOSE                 NtClose;
  */
 static BOOL init_undocumented()
 {
-    HMODULE ntdll_handle = LoadLibrary(_T("ntdll.dll"));
+    ntdll_handle = LoadLibrary(_T("ntdll.dll"));
 
     if (ntdll_handle == NULL)
     {
         return FALSE;
     }
+
+    atexit(unload_undocumented);
 
     NtQueryDirectoryObject =
         (NTQUERYDIRECTORYOBJECT) GetProcAddress(ntdll_handle,
