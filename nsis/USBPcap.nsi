@@ -1,7 +1,17 @@
 !include "LogicLib.nsh"
 !include "x64.nsh"
+!include "WinVer.nsh"
 
-!include "GetWindowsVersion.nsh"
+!macro __MOZ__WinVer_DefineOSTests WinVer
+  !insertmacro __WinVer_DefineOSTest AtLeast ${WinVer} ""
+  !insertmacro __WinVer_DefineOSTest AtMost ${WinVer} ""
+  !insertmacro __WinVer_DefineOSTest Is ${WinVer} ""
+!macroend
+
+!ifndef WINVER_8
+  !define WINVER_8    0x06020000 ;6.02.????
+  !insertmacro __MOZ__WinVer_DefineOSTests 8
+!endif
 
 !define VERSION $%_USBPCAP_VERSION%
 
@@ -91,31 +101,11 @@ Function .onInit
   Abort
 
 done:
-  Push $R0
-  ${GetWindowsVersion} $R0
-
-  ${If} ${RunningX64}
-    ${Select} $R0
-      ${Case} "2003" ; 64-bit XP
-      ${Case} "Vista"
-      ${Case} "7"
-      ${Case} "8"
-      ${CaseElse}
-        MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
-        Quit
-    ${EndSelect}
-  ${Else}
-    ${Select} $R0
-      ${Case} "XP"
-      ${Case} "Vista"
-      ${Case} "7"
-      ${Case} "8"
-      ${CaseElse}
-        MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
-        Quit
-    ${EndSelect}
+  ${IfNot} ${AtLeastWinXP}
+    MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
+    Quit
   ${EndIf}
-
+  
   ${If} ${RunningX64}
     StrCpy $INSTDIR "$PROGRAMFILES64\USBPcap"
   ${Else}
@@ -143,47 +133,45 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
                    "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
 
-  ${GetWindowsVersion} $R0
   ${If} ${RunningX64}
-    ${Select} $R0
-      ${Case} "2003" ; 64-bit XP
-        File "..\Release\XP\x64\USBPcap.inf"
-        File "..\Release\XP\x64\USBPcap.sys"
-        File "..\Release\XP\x64\USBPcapamd64.cat"
-      ${Case} "Vista"
-        File "..\Release\Vista\x64\USBPcap.inf"
-        File "..\Release\Vista\x64\USBPcap.sys"
-        File "..\Release\Vista\x64\USBPcapamd64.cat"
-      ${Case} "7"
-        File "..\Release\Windows7\x64\USBPcap.inf"
-        File "..\Release\Windows7\x64\USBPcap.sys"
-        File "..\Release\Windows7\x64\USBPcapamd64.cat"
-      ${Case} "8"
-        File "..\Release\Windows8\x64\USBPcap.inf"
-        File "..\Release\Windows8\x64\USBPcap.sys"
-        File "..\Release\Windows8\x64\USBPcapamd64.cat"
-    ${EndSelect}
+    ${If} ${AtLeastWin8}
+      File "..\Release\Windows8\x64\USBPcap.inf"
+      File "..\Release\Windows8\x64\USBPcap.sys"
+      File "..\Release\Windows8\x64\USBPcapamd64.cat"
+    ${ElseIf} ${AtLeastWin7}
+      File "..\Release\Windows7\x64\USBPcap.inf"
+      File "..\Release\Windows7\x64\USBPcap.sys"
+      File "..\Release\Windows7\x64\USBPcapamd64.cat"
+    ${ElseIf} ${AtLeastWinVista}
+      File "..\Release\Vista\x64\USBPcap.inf"
+      File "..\Release\Vista\x64\USBPcap.sys"
+      File "..\Release\Vista\x64\USBPcapamd64.cat"
+    ${Else}
+      ; Assume 64-bit XP
+      File "..\Release\XP\x64\USBPcap.inf"
+      File "..\Release\XP\x64\USBPcap.sys"
+      File "..\Release\XP\x64\USBPcapamd64.cat"
+    ${EndIf}
   ${Else}
-    ${Select} $R0
-      ${Case} "XP"
-        File "..\Release\XP\x86\USBPcap.inf"
-        File "..\Release\XP\x86\USBPcap.sys"
-        File "..\Release\XP\x86\USBPcapx86.cat"
-      ${Case} "Vista"
-        File "..\Release\Vista\x86\USBPcap.inf"
-        File "..\Release\Vista\x86\USBPcap.sys"
-        File "..\Release\Vista\x86\USBPcapx86.cat"
-      ${Case} "7"
-        File "..\Release\Windows7\x86\USBPcap.inf"
-        File "..\Release\Windows7\x86\USBPcap.sys"
-        File "..\Release\Windows7\x86\USBPcapx86.cat"
-      ${Case} "8"
-        File "..\Release\Windows8\x86\USBPcap.inf"
-        File "..\Release\Windows8\x86\USBPcap.sys"
-        File "..\Release\Windows8\x86\USBPcapx86.cat"
-    ${EndSelect}
+    ${If} ${AtLeastWin8}
+      File "..\Release\Windows8\x86\USBPcap.inf"
+      File "..\Release\Windows8\x86\USBPcap.sys"
+      File "..\Release\Windows8\x86\USBPcapx86.cat"
+    ${ElseIf} ${AtLeastWin7}
+      File "..\Release\Windows7\x86\USBPcap.inf"
+      File "..\Release\Windows7\x86\USBPcap.sys"
+      File "..\Release\Windows7\x86\USBPcapx86.cat"
+    ${ElseIf} ${AtLeastWinVista}
+      File "..\Release\Vista\x86\USBPcap.inf"
+      File "..\Release\Vista\x86\USBPcap.sys"
+      File "..\Release\Vista\x86\USBPcapx86.cat"
+    ${Else}
+      ; Assume 32-bit Win XP
+      File "..\Release\XP\x86\USBPcap.inf"
+      File "..\Release\XP\x86\USBPcap.sys"
+      File "..\Release\XP\x86\USBPcapx86.cat"
+    ${EndIf}
   ${EndIf}
-
 
   ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf'
   ${If} ${RunningX64}
