@@ -189,6 +189,7 @@ int __cdecl main(int argc, CHAR **argv)
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
 
+    //TODO: Add a -h help option
     while ((c = getopt(argc, argv, "d:o:s:b:I")) != -1)
     {
         switch (c)
