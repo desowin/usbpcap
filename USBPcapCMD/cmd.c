@@ -187,6 +187,7 @@ int __cdecl main(int argc, CHAR **argv)
 
     /* Too bad Microsoft compiler does not support C99...
     options = gopt_sort(&argc, argv, gopt_start(
+        gopt_option('h', 0, gopt_shorts('h, '?'), gopt_longs("help")),
         gopt_option('d', GOPT_ARG, gopt_shorts('d'), gopt_longs("device")),
         gopt_option('o', GOPT_ARG, gopt_shorts('o'), gopt_longs("output")),
         gopt_option('s', GOPT_ARG, gopt_shorts('s'), gopt_longs("snaplen")),
@@ -194,12 +195,14 @@ int __cdecl main(int argc, CHAR **argv)
         gopt_option('I', 0, gopt_shorts('I'), gopt_longs("init-non-standard-hwids"))));
     */
 
+    const char *const h_long[] = {"help", NULL};
     const char *const d_long[] = {"device", NULL};
     const char *const o_long[] = {"output", NULL};
     const char *const s_long[] = {"snaplen", NULL};
     const char *const b_long[] = {"bufferlen", NULL};
     const char *const I_long[] = {"init-non-standard-hwids", NULL};
     opt_spec_t opt_specs[] = {
+        {'h', 0, "h?", h_long},
         {'d', GOPT_ARG, "d", d_long},
         {'o', GOPT_ARG, "o", o_long},
         {'s', GOPT_ARG, "s", s_long},
@@ -215,6 +218,30 @@ int __cdecl main(int argc, CHAR **argv)
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
 
+    if (gopt(options, 'h'))
+    {
+        printf("Usage: USBPcapCMD.exe [options]\n"
+               "  -h, -?, --help\n"
+               "    Prints this help.\n"
+               "  -d <device>, --device <device>\n"
+               "    USBPcap control device to open. Example: -d \\\\.\\USBPcap1.\n"
+               "  -o <file>, --output <file>\n"
+               "    Output .pcap file name.\n"
+               "  -s <len>, --snaplen <len>\n"
+               "    Sets snapshot length.\n"
+               "  -b <len>, --bufferlen <len>\n"
+               "    Sets internal capture buffer length. Valid range <4096,134217728>.\n"
+               "  -I,  --init-non-standard-hwids\n"
+               "    Initializes NonStandardHWIDs registry key used by USBPcapDriver.\n"
+               "    This registry key is needed for USB 3.0 capture.\n");
+        return 0;
+    }
+
+    if (gopt(options, 'I'))
+    {
+        init_non_standard_roothub_hwid();
+        return 0;
+    }
 
     if (gopt_arg(options, 'd', &tmp))
     {
@@ -246,12 +273,6 @@ int __cdecl main(int argc, CHAR **argv)
                    "Valid range <4096,134217728>.\n");
             return -1;
         }
-    }
-
-    if (gopt(options, 'I'))
-    {
-        init_non_standard_roothub_hwid();
-        return 0;
     }
 
     if (data.filename != NULL && data.device != NULL)
