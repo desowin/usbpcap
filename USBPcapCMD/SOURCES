@@ -26,6 +26,6 @@ SOURCES = USBPcapCMD.rc \
           cmd.c \
           enum.c \
           filters.c \
-          getopt.c \
+          gopt.c \
           roothubs.c \
           thread.c

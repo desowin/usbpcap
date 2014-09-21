@@ -34,7 +34,7 @@
 #include "thread.h"
 #include "USBPcap.h"
 #include "enum.h"
-#include "getopt.h"
+#include "gopt.h"
 #include "roothubs.h"
 
 
@@ -178,51 +178,80 @@ int cmd_interactive(struct thread_data *data)
 
 int __cdecl main(int argc, CHAR **argv)
 {
+    void *options;
+    const char *tmp;
     struct thread_data data;
-    int c;
     HANDLE thread;
     DWORD thread_id;
     BOOL interactive;
+
+    /* Too bad Microsoft compiler does not support C99...
+    options = gopt_sort(&argc, argv, gopt_start(
+        gopt_option('d', GOPT_ARG, gopt_shorts('d'), gopt_longs("device")),
+        gopt_option('o', GOPT_ARG, gopt_shorts('o'), gopt_longs("output")),
+        gopt_option('s', GOPT_ARG, gopt_shorts('s'), gopt_longs("snaplen")),
+        gopt_option('b', GOPT_ARG, gopt_shorts('b'), gopt_longs("bufferlen")),
+        gopt_option('I', 0, gopt_shorts('I'), gopt_longs("init-non-standard-hwids"))));
+    */
+
+    const char *const d_long[] = {"device", NULL};
+    const char *const o_long[] = {"output", NULL};
+    const char *const s_long[] = {"snaplen", NULL};
+    const char *const b_long[] = {"bufferlen", NULL};
+    const char *const I_long[] = {"init-non-standard-hwids", NULL};
+    opt_spec_t opt_specs[] = {
+        {'d', GOPT_ARG, "d", d_long},
+        {'o', GOPT_ARG, "o", o_long},
+        {'s', GOPT_ARG, "s", s_long},
+        {'b', GOPT_ARG, "b", b_long},
+        {'I', 0, "I", I_long},
+    };
+
+    options = gopt_sort(&argc, argv, (const void*)opt_specs);
+
 
     data.filename = NULL;
     data.device = NULL;
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
 
-    while ((c = getopt(argc, argv, "d:o:s:b:I")) != -1)
+
+    if (gopt_arg(options, 'd', &tmp))
     {
-        switch (c)
+        data.device = _strdup(tmp);
+    }
+
+    if (gopt_arg(options, 'o', &tmp))
+    {
+        data.filename = _strdup(tmp);
+    }
+
+    if (gopt_arg(options, 's', &tmp))
+    {
+        data.snaplen = atol(tmp);
+        if (data.snaplen == 0)
         {
-            case 'd':
-                data.device = _strdup(optarg);
-                break;
-            case 'o':
-                data.filename = _strdup(optarg);
-                break;
-            case 's':
-                data.snaplen = atol(optarg);
-                if (data.snaplen == 0)
-                {
-                    printf("Invalid snapshot length!\n");
-                    return -1;
-                }
-                break;
-            case 'b':
-                data.bufferlen = atol(optarg);
-                /* Minimum buffer size if 4 KiB, maximum 128 MiB */
-                if (data.bufferlen < 4096 || data.bufferlen > 134217728)
-                {
-                    printf("Invalid buffer length! "
-                           "Valid range <4096,134217728>.\n");
-                    return -1;
-                }
-                break;
-            case 'I':
-                init_non_standard_roothub_hwid();
-                return 0;
-            default:
-                break;
+            printf("Invalid snapshot length!\n");
+            return -1;
         }
+    }
+
+    if (gopt_arg(options, 'b', &tmp))
+    {
+        data.bufferlen = atol(tmp);
+        /* Minimum buffer size if 4 KiB, maximum 128 MiB */
+        if (data.bufferlen < 4096 || data.bufferlen > 134217728)
+        {
+            printf("Invalid buffer length! "
+                   "Valid range <4096,134217728>.\n");
+            return -1;
+        }
+    }
+
+    if (gopt(options, 'I'))
+    {
+        init_non_standard_roothub_hwid();
+        return 0;
     }
 
     if (data.filename != NULL && data.device != NULL)

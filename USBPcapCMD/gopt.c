@@ -29,14 +29,6 @@ read http://www.purposeful.co.uk/tfl/
 #define EX_USAGE EXIT_FAILURE
 #endif
 
-struct opt_spec_s {
-  int key;
-  int flags;
-  const char *shorts;
-  const char* const *longs;
-};
-typedef struct opt_spec_s opt_spec_t;
-
 struct opt_s {
   int key;
   const char *arg;
@@ -204,7 +196,7 @@ void *gopt_sort( int *argc, const char **argv, const void *opt_specs ){
 
     next_option-> key= 0;
     *next_operand= NULL;
-    *argc= next_operand - argv;
+    *argc= (int)(next_operand - argv);
   }
   return opts;
 }

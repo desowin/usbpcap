@@ -31,6 +31,14 @@ read http://www.purposeful.co.uk/tfl/
 #define gopt_longs( ... )       (const char**)(const char*[]){ __VA_ARGS__, NULL }
 
 
+struct opt_spec_s {
+  int key;
+  int flags;
+  const char *shorts;
+  const char* const *longs;
+};
+typedef struct opt_spec_s opt_spec_t;
+
 void *gopt_sort( int *argc, const char **argv, const void *opt_specs );
 /* returns a pointer for use in the following calls
  * prints to stderr and call exit() on error
