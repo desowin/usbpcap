@@ -20,6 +20,7 @@ TARGETLIBS = $(SDK_LIB_PATH)\hid.lib \
              $(SDK_LIB_PATH)\comdlg32.lib \
              $(DDK_LIB_PATH)\advapi32.lib \
              $(DDK_LIB_PATH)\Cfgmgr32.lib \
+             $(DDK_LIB_PATH)\Shell32.lib \
              $(DDK_LIB_PATH)\Shlwapi.lib
 
 SOURCES = USBPcapCMD.rc \

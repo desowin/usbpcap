@@ -31,12 +31,15 @@
 struct thread_data
 {
     char *device;   /* Filter device object name */
-    char *filename; /* pcap filename */
+    char *filename; /* Output filename */
     UINT32 snaplen; /* Snapshot length */
     UINT32 bufferlen; /* Internal kernel-mode buffer size */
     volatile BOOL process; /* FALSE if thread should stop */
+    HANDLE read_handle; /* Handle to read data from. */
+    HANDLE write_handle; /* Handle to write data to. */
 };
 
+HANDLE create_filter_read_handle(struct thread_data *data);
 DWORD WINAPI read_thread(LPVOID param);
 
 #endif /* USBPCAP_CMD_THREAD_H */

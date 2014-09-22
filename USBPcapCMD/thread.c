@@ -30,50 +30,16 @@
 #include "USBPcap.h"
 #include "thread.h"
 
-DWORD WINAPI read_thread(LPVOID param)
+HANDLE create_filter_read_handle(struct thread_data *data)
 {
-    struct thread_data* data = (struct thread_data*)param;
-    unsigned char* buffer;
-
     HANDLE filter_handle = INVALID_HANDLE_VALUE;
-    HANDLE write_handle = INVALID_HANDLE_VALUE;
+    char* inBuf = NULL;
+    DWORD inBufSize = 0;
     DWORD bytes_ret;
     DWORD ioctl;
 
-    char* inBuf = NULL;
-    DWORD inBufSize = 0;
-
-    buffer = malloc(data->bufferlen);
-    if (buffer == NULL)
-    {
-        printf("Failed to allocate user-mode buffer (length %d)\n",
-               data->bufferlen);
-        goto finish;
-    }
-
-    if (strncmp("-", data->filename, 2) == 0)
-    {
-        write_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-    }
-    else
-    {
-        write_handle = CreateFileA(data->filename,
-                                   GENERIC_WRITE,
-                                   0,
-                                   NULL,
-                                   CREATE_NEW,
-                                   FILE_ATTRIBUTE_NORMAL,
-                                   NULL);
-    }
-
-    if (write_handle == INVALID_HANDLE_VALUE)
-    {
-        printf("Failed to create target file\n");
-        goto finish;
-    }
-
     filter_handle = CreateFileA(data->device,
-                                GENERIC_READ|GENERIC_WRITE,
+                                GENERIC_READ|GENERIC_WRITE|FILE_FLAG_OVERLAPPED,
                                 0,
                                 0,
                                 OPEN_EXISTING,
@@ -137,28 +103,13 @@ DWORD WINAPI read_thread(LPVOID param)
         goto finish;
     }
 
-    for (; data->process == TRUE;)
-    {
-        DWORD read;
-        DWORD written;
-        DWORD i;
-
-        if (ReadFile(filter_handle, (PVOID)buffer, data->bufferlen, &read, NULL))
-        {
-            WriteFile(write_handle, buffer, read, &written, NULL);
-            FlushFileBuffers(write_handle);
-        }
-    }
+    free(inBuf);
+    return filter_handle;
 
 finish:
-    if (buffer != NULL)
+    if (inBuf != NULL)
     {
-        free(buffer);
-    }
-
-    if (write_handle != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(write_handle);
+        free(inBuf);
     }
 
     if (filter_handle != INVALID_HANDLE_VALUE)
@@ -166,8 +117,97 @@ finish:
         CloseHandle(filter_handle);
     }
 
-    if (inBuf != NULL)
-        free(inBuf);
+    return INVALID_HANDLE_VALUE;
+}
+
+DWORD WINAPI read_thread(LPVOID param)
+{
+    struct thread_data* data = (struct thread_data*)param;
+    unsigned char* buffer;
+    OVERLAPPED read_overlapped;
+    OVERLAPPED write_handle_read_overlapped; /* Used to detect broken pipe. */
+
+    buffer = malloc(data->bufferlen);
+    if (buffer == NULL)
+    {
+        printf("Failed to allocate user-mode buffer (length %d)\n",
+               data->bufferlen);
+        goto finish;
+    }
+
+    if (data->read_handle == INVALID_HANDLE_VALUE)
+    {
+        printf("Thread started with invalid read handle!\n");
+        goto finish;
+    }
+
+    if (data->write_handle == INVALID_HANDLE_VALUE)
+    {
+        printf("Thread started with invalid write handle!\n");
+        goto finish;
+    }
+
+    memset(&read_overlapped, 0, sizeof(read_overlapped));
+    memset(&write_handle_read_overlapped, 0, sizeof(write_handle_read_overlapped));
+    read_overlapped.hEvent = CreateEvent(NULL,
+                                         TRUE /* Manual Reset */,
+                                         FALSE /* Default non signaled */,
+                                         NULL /* No name */);
+    write_handle_read_overlapped.hEvent = CreateEvent(NULL,
+                                                      TRUE /* Manual Reset */,
+                                                      FALSE /* Default non signaled */,
+                                                      NULL /* No name */);
+    for (; data->process == TRUE;)
+    {
+        const HANDLE table[] = {read_overlapped.hEvent, write_handle_read_overlapped.hEvent};
+        DWORD dummy_read;
+        unsigned char dummy_buf;
+        DWORD read;
+        DWORD written;
+        DWORD i;
+
+        ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, &read, &read_overlapped);
+        ReadFile(data->write_handle, &dummy_buf, sizeof(dummy_buf), &dummy_read, &write_handle_read_overlapped);
+
+        i = WaitForMultipleObjects(sizeof(table)/sizeof(table[0]),
+                                   table,
+                                   FALSE,
+                                   INFINITE);
+
+        if (i == WAIT_OBJECT_0)
+        {
+            /* Standard read */
+            GetOverlappedResult(data->read_handle, &read_overlapped, &read, TRUE);
+            ResetEvent(read_overlapped.hEvent);
+            WriteFile(data->write_handle, buffer, read, &written, NULL);
+            FlushFileBuffers(data->write_handle);
+        }
+        else if (i == (WAIT_OBJECT_0 + 1))
+        {
+            /* Most likely broker pipe detected */
+            GetOverlappedResult(data->write_handle, &write_handle_read_overlapped, &dummy_read, TRUE);
+            if (GetLastError() == ERROR_BROKEN_PIPE)
+            {
+                /* We should quit. */
+                data->process = FALSE;
+            }
+            else
+            {
+                /* Don't care about result. Start read again. */
+                ReadFile(data->write_handle, &dummy_buf, sizeof(dummy_buf), &dummy_read, &write_handle_read_overlapped);
+            }
+            ResetEvent(write_handle_read_overlapped.hEvent);
+        }
+    }
+
+    CloseHandle(read_overlapped.hEvent);
+    CloseHandle(write_handle_read_overlapped.hEvent);
+
+finish:
+    if (buffer != NULL)
+    {
+        free(buffer);
+    }
 
     return 0;
 }

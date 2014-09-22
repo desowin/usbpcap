@@ -28,6 +28,11 @@ extern ULONG volatile g_controlId;
 #define MAX_NTNAME_LEN     (sizeof(NTNAME_PREFIX)+sizeof(MAX_CONTROL_ID))
 #define MAX_SYMBOLIC_LEN   (sizeof(SYMBOLIC_PREFIX)+sizeof(MAX_CONTROL_ID))
 
+DECLARE_CONST_UNICODE_STRING(
+    SDDL_DEVOBJ_SYS_ALL_ADM_ALL_EVERYONE_ANY,
+    L"D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GX;;;WD)(A;;GX;;;RC)"
+);
+
 __drv_requiresIRQL(PASSIVE_LEVEL)
 NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
                                            OUT PDEVICE_OBJECT *control,
@@ -78,7 +83,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
                                   FILE_DEVICE_UNKNOWN,
                                   FILE_DEVICE_SECURE_OPEN,
                                   TRUE, /* Exclusive device */
-                                  &SDDL_DEVOBJ_SYS_ALL_ADM_ALL,
+                                  &SDDL_DEVOBJ_SYS_ALL_ADM_ALL_EVERYONE_ANY,
                                   NULL,
                                   &controlDevice);
 

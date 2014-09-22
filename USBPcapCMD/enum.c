@@ -17,6 +17,7 @@
 #include <string.h>
 #include <tchar.h>
 #include "USBPcap.h"
+#include "enum.h"
 
 #define IOCTL_OUTPUT_BUFFER_SIZE 1024
 
@@ -107,7 +108,8 @@ fallback:
 
 static void EnumerateHub(PTSTR hub,
                          PUSB_NODE_CONNECTION_INFORMATION connection_info,
-                         ULONG level);
+                         ULONG level,
+                         EnumerationType enumType);
 
 static void print_indent(ULONG level)
 {
@@ -124,6 +126,41 @@ static void print_indent(ULONG level)
         printf("  ");
         level--;
     }
+}
+
+static PSTR WideStrToUTF8(__in LPCWSTR WideStr)
+{
+    ULONG nBytes;
+    PTSTR MultiStr;
+
+    // Get the length of the converted string
+    nBytes = WideCharToMultiByte(CP_UTF8, 0, WideStr, -1,
+                                 NULL, 0, NULL, NULL);
+
+    if (nBytes == 0)
+    {
+        return NULL;
+    }
+
+    // Allocate space to hold the converted string
+    MultiStr = GlobalAlloc(GPTR, nBytes);
+
+    if (MultiStr == NULL)
+    {
+        return NULL;
+    }
+
+    // Convert the string
+    nBytes = WideCharToMultiByte(CP_UTF8, 0, WideStr, -1,
+                                 MultiStr, nBytes, NULL, NULL);
+
+    if (nBytes == 0)
+    {
+        GlobalFree(MultiStr);
+        return NULL;
+    }
+
+    return MultiStr;
 }
 
 static PTSTR WideStrToMultiStr(__in LPCWSTR WideStr)
@@ -348,7 +385,75 @@ GetExternalHubNameError:
     return NULL;
 }
 
-static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
+typedef struct _Stack
+{
+    USHORT value;
+    struct _Stack *next;
+} Stack;
+
+/**
+ *  Pops value from stack.
+ *  Returns TRUE on success, FALSE otherwise.
+ */
+static BOOL stack_pop(Stack **stack, USHORT *ret_val)
+{
+    if (*stack == NULL)
+    {
+        return FALSE;
+    }
+    else
+    {
+        Stack *tmp;
+        tmp = *stack;
+        *stack = tmp->next;
+
+        *ret_val = tmp->value;
+        free(tmp);
+        return TRUE;
+    }
+}
+
+/**
+ *  Peeks value from stack without removing it.
+ *  Returns TRUE on success, FALSE otherwise.
+ */
+static BOOL stack_peek(Stack **stack, USHORT *ret_val)
+{
+    if (*stack == NULL)
+    {
+        return FALSE;
+    }
+    else
+    {
+        *ret_val = (*stack)->value;
+        return TRUE;
+    }
+}
+
+/**
+ * Pushes value to stack.
+ * Return TRUE on success, FALSE otherwise.
+ */
+static BOOL stack_push(Stack **stack, USHORT value)
+{
+    Stack *head = malloc(sizeof(Stack));
+    if (head != NULL)
+    {
+        head->value = value;
+        head->next = *stack;
+        *stack = head;
+        return TRUE;
+    }
+    else
+    {
+        return FALSE;
+    }
+}
+
+
+
+static VOID PrintDevinstChildren(DEVINST parent, ULONG indent,
+                                 USHORT deviceAddress, EnumerationType enumType)
 {
     DEVINST    current;
     DEVINST    next;
@@ -356,6 +461,9 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
     ULONG      level;
     ULONG      len;
     TCHAR      buf[MAX_DEVICE_ID_LEN];
+    USHORT     parentNode = 0;
+    USHORT     nextNode = 1;
+    Stack      *nodeStack = NULL;
 
     level = indent;
     current = parent;
@@ -365,6 +473,7 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
     {
         current = next;
         level++;
+        stack_push(&nodeStack, parentNode);
     }
 
     /* Do depth-first iteration over all children and get their
@@ -395,9 +504,28 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
 
         if (cr == CR_SUCCESS && (((PWSTR)buf)[0] != L'\0'))
         {
-            print_indent(level);
-            wide_print((PWSTR)buf);
-            printf("\n");
+            if (enumType == ENUMERATE_USBPCAPCMD)
+            {
+                print_indent(level);
+                wide_print((PWSTR)buf);
+                printf("\n");
+            }
+            else if (enumType == ENUMERATE_EXTCAP)
+            {
+                PTSTR str = WideStrToUTF8((LPCWSTR)buf);
+                printf("value {arg=%d}{value=%d_%d}{display=%s}{enabled=false}",
+                       EXTCAP_ARGNUM_MULTICHECK, deviceAddress, nextNode,
+                       str);
+                GlobalFree(str);
+                if ((TRUE == stack_peek(&nodeStack, &parentNode)) && parentNode != 0)
+                {
+                    printf("{parent=%d_%d}\n", deviceAddress, parentNode);
+                }
+                else
+                {
+                    printf("{parent=%d}\n", deviceAddress);
+                }
+            }
         }
 
         // Go down a level to the first next.
@@ -407,6 +535,8 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
         {
             current = next;
             level++;
+            stack_push(&nodeStack, nextNode);
+            nextNode++;
             continue;
         }
 
@@ -421,6 +551,7 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
             if (cr == CR_SUCCESS)
             {
                 current = next;
+                nextNode++;
                 break;
             }
 
@@ -430,6 +561,7 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
             {
                 current = next;
                 level--;
+                stack_pop(&nodeStack, &parentNode);
                 if (current == parent || level == indent)
                 {
                     /* We went back to the parent, explicitly return here */
@@ -438,6 +570,7 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
             }
             else
             {
+                while (TRUE == stack_pop(&nodeStack, &parentNode));
                 /* Nothing left to do */
                 return;
             }
@@ -446,7 +579,8 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent)
 }
 
 VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
-                     ULONG Level, BOOLEAN PrintAllChildren)
+                     ULONG Level, BOOLEAN PrintAllChildren,
+                     USHORT deviceAddress, USHORT parentAddress, EnumerationType enumType)
 {
     DEVINST    devInst;
     DEVINST    devInstNext;
@@ -491,14 +625,30 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
 
             if (cr == CR_SUCCESS)
             {
-                print_indent(Level);
-                printf("[Port %d] ", Index);
-                wide_print((PWSTR)buf);
-                printf("\n");
+                if (enumType == ENUMERATE_USBPCAPCMD)
+                {
+                    print_indent(Level);
+                    printf("[Port %d] ", Index);
+                    wide_print((PWSTR)buf);
+                    printf("\n");
+                }
+                else if (enumType == ENUMERATE_EXTCAP)
+                {
+                    PTSTR str = WideStrToUTF8((LPCWSTR)buf);
+                    printf("value {arg=%d}{value=%d}{display=[%d] %s}{enabled=true}",
+                           EXTCAP_ARGNUM_MULTICHECK,
+                           deviceAddress, deviceAddress, str);
+                    if (parentAddress != 0)
+                    {
+                        printf("{parent=%d}", parentAddress);
+                    }
+                    printf("\n");
+                    GlobalFree(str);
+                }
 
                 if (PrintAllChildren)
                 {
-                    PrintDevinstChildren(devInst, Level);
+                    PrintDevinstChildren(devInst, Level, deviceAddress, enumType);
                 }
             }
 
@@ -545,7 +695,8 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
 }
 
 static VOID
-EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level)
+EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level,
+                  USHORT hubAddress, EnumerationType enumType)
 {
     ULONG       index;
     BOOL        success;
@@ -586,7 +737,10 @@ EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level)
             if (driverKeyName)
             {
                 PrintDeviceDesc(driverKeyName, index, level,
-                                !connectionInfo.DeviceIsHub);
+                                !connectionInfo.DeviceIsHub,
+                                connectionInfo.DeviceAddress,
+                                hubAddress,
+                                enumType);
 
                 GlobalFree(driverKeyName);
             }
@@ -604,7 +758,8 @@ EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level)
                 {
                     EnumerateHub(extHubName,
                                  &connectionInfo,
-                                 level+1);
+                                 level+1,
+                                 enumType);
                     GlobalFree(extHubName);
                 }
             }
@@ -615,7 +770,8 @@ EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level)
 
 static void EnumerateHub(PTSTR hub,
                          PUSB_NODE_CONNECTION_INFORMATION connection_info,
-                         ULONG level)
+                         ULONG level,
+                         EnumerationType enumType)
 {
     PUSB_NODE_INFORMATION   hubInfo;
     HANDLE                  hHubDevice;
@@ -703,7 +859,9 @@ static void EnumerateHub(PTSTR hub,
     // Now recursively enumrate the ports of this hub.
     EnumerateHubPorts(hHubDevice,
                       hubInfo->u.HubInformation.HubDescriptor.bNumberOfPorts,
-                      level);
+                      level,
+                      (connection_info == NULL) ? 0 : connection_info->DeviceAddress,
+                      enumType);
 
 EnumerateHubError:
     // Clean up any stuff that got allocated
@@ -720,7 +878,7 @@ EnumerateHubError:
     }
 }
 
-void enumerate_attached_devices(char *filter)
+void enumerate_attached_devices(const char *filter, EnumerationType enumType)
 {
     HANDLE filter_handle;
     WCHAR  outBuf[IOCTL_OUTPUT_BUFFER_SIZE];
@@ -728,7 +886,7 @@ void enumerate_attached_devices(char *filter)
     DWORD  bytes_ret;
 
     filter_handle = CreateFileA(filter,
-                                GENERIC_READ|GENERIC_WRITE,
+                                0,
                                 0,
                                 0,
                                 OPEN_EXISTING,
@@ -754,12 +912,15 @@ void enumerate_attached_devices(char *filter)
         {
             PTSTR str;
 
-            printf("  ");
-            wide_print(outBuf);
-            printf("\n");
+            if (enumType == ENUMERATE_USBPCAPCMD)
+            {
+                printf("  ");
+                wide_print(outBuf);
+                printf("\n");
+            }
 
             str = WideStrToMultiStr(outBuf);
-            EnumerateHub(str, NULL, 2);
+            EnumerateHub(str, NULL, 2, enumType);
             GlobalFree(str);
         }
     }
