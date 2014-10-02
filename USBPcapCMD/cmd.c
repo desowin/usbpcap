@@ -280,8 +280,6 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
             }
         }
 
-        wprintf(L"pipe: %s\n", pipeName);
-
         *pcap_handle = CreateNamedPipeW(pipeName,
                                         /* Pipe is used for elevated worker -> caller process communication.
                                          * It is full duplex to allow caller to notice elevated worker that
@@ -749,6 +747,12 @@ int cmd_extcap(void *options)
         struct thread_data data;
         const char *tmp;
         const char *fifo = NULL;
+
+        data.filename = NULL;
+        data.device = NULL;
+        data.snaplen = 65535;
+        data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
+
         /* --fifo */
         gopt_arg(options, '6', &fifo);
         if ((fifo == NULL) || (extcap_interface == NULL))
