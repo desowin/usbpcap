@@ -37,6 +37,7 @@ struct thread_data
     volatile BOOL process; /* FALSE if thread should stop */
     HANDLE read_handle; /* Handle to read data from. */
     HANDLE write_handle; /* Handle to write data to. */
+    HANDLE job_handle; /* Handle to job object of worker process. */
 };
 
 HANDLE create_filter_read_handle(struct thread_data *data);

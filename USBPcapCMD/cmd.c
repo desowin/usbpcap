@@ -550,7 +550,33 @@ static void start_capture(struct thread_data *data)
     else
     {
         /* We are not elevated. Create elevated worker process. */
+        if (data->job_handle == INVALID_HANDLE_VALUE)
+        {
+            JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+
+            data->job_handle = CreateJobObject(NULL, NULL);
+            if (data->job_handle == NULL)
+            {
+                printf("Failed to create job object!\n");
+                data->process = FALSE;
+                data->job_handle = INVALID_HANDLE_VALUE;
+                return;
+            }
+
+            memset(&info, 0, sizeof(info));
+            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+            SetInformationJobObject(data->job_handle, JobObjectExtendedLimitInformation, &info, sizeof(info));
+        }
+
         process = create_elevated_worker(data->device, data->filename, data->bufferlen, &pipe_handle);
+
+        if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+        {
+            printf("Failed to Assign process to job object!\n");
+            TerminateProcess(process, 0);
+            CloseHandle(process);
+            return;
+        }
 
         if (strncmp("-", data->filename, 2) == 0)
         {
@@ -694,7 +720,7 @@ int print_extcap_options(const char *device)
     return 0;
 }
 
-int cmd_extcap(void *options)
+int cmd_extcap(void *options, struct thread_data *data)
 {
     const char *extcap_interface = NULL;
 
@@ -744,14 +770,8 @@ int cmd_extcap(void *options)
     /* --capture */
     if (gopt(options, '5'))
     {
-        struct thread_data data;
         const char *tmp;
         const char *fifo = NULL;
-
-        data.filename = NULL;
-        data.device = NULL;
-        data.snaplen = 65535;
-        data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
 
         /* --fifo */
         gopt_arg(options, '6', &fifo);
@@ -764,8 +784,8 @@ int cmd_extcap(void *options)
 
         if (gopt_arg(options, 's', &tmp))
         {
-            data.snaplen = atol(tmp);
-            if (data.snaplen == 0)
+            data->snaplen = atol(tmp);
+            if (data->snaplen == 0)
             {
                 /* Invalid snapshot length! */
                 return -1;
@@ -774,23 +794,24 @@ int cmd_extcap(void *options)
 
         if (gopt_arg(options, 'b', &tmp))
         {
-            data.bufferlen = atol(tmp);
+            data->bufferlen = atol(tmp);
             /* Minimum buffer size if 4 KiB, maximum 128 MiB */
-            if (data.bufferlen < 4096 || data.bufferlen > 134217728)
+            if (data->bufferlen < 4096 || data->bufferlen > 134217728)
             {
                 /* Invalid buffer length! Valid range <4096,134217728>. */
                 return -1;
             }
         }
 
-        data.device = (char*)extcap_interface;
-        data.filename = (char*)fifo;
-        data.process = TRUE;
+        data->device = (char*)extcap_interface;
+        data->filename = (char*)fifo;
+        data->process = TRUE;
 
-        data.read_handle = INVALID_HANDLE_VALUE;
-        data.write_handle = INVALID_HANDLE_VALUE;
+        data->read_handle = INVALID_HANDLE_VALUE;
+        data->write_handle = INVALID_HANDLE_VALUE;
 
-        start_capture(&data);
+        start_capture(data);
+        return 0;
     }
 
     return -1;
@@ -862,6 +883,7 @@ int __cdecl main(int argc, CHAR **argv)
     data.device = NULL;
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
+    data.job_handle = INVALID_HANDLE_VALUE;
 
     if (gopt(options, 'h'))
     {
@@ -888,7 +910,12 @@ int __cdecl main(int argc, CHAR **argv)
         gopt(options, '5') || gopt(options, '6'))
     {
         /* Make sure we don't go any further. */
-        return cmd_extcap(options);
+        int ret = cmd_extcap(options, &data);
+        if (data.job_handle != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(data.job_handle);
+        }
+        return ret;
     }
 
     if (gopt(options, 'I'))
@@ -969,6 +996,11 @@ int __cdecl main(int argc, CHAR **argv)
     if (data.filename != NULL)
     {
         free(data.filename);
+    }
+
+    if (data.job_handle != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(data.job_handle);
     }
 
     return 0;
