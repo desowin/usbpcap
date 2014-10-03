@@ -248,6 +248,8 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
     PWSTR pipeName = NULL;
     SHELLEXECUTEINFOW exInfo = { 0 };
 
+    *pcap_handle = INVALID_HANDLE_VALUE;
+
     exePathLen = GetModuleFullName(NULL, NULL, 0, NULL);
     exePath = (WCHAR *)malloc(exePathLen * sizeof(WCHAR));
 
@@ -366,6 +368,11 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
 
     if (FALSE == bSuccess)
     {
+        if (*pcap_handle != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(*pcap_handle);
+            *pcap_handle = INVALID_HANDLE_VALUE;
+        }
         printf("Failed to create worker process!\n");
         return INVALID_HANDLE_VALUE;
     }
@@ -554,65 +561,73 @@ static void start_capture(struct thread_data *data)
         /* We are not elevated. Create elevated worker process. */
         process = create_elevated_worker(data->device, data->filename, data->bufferlen, &pipe_handle);
 
-        IsProcessInJob(process, NULL, &in_job);
-
-        /* If we are running inside Visual Studio debug session newly created process is
-         * already in a job (assume that the job does not allow processes to break from it).
-         *
-         * Unfortunately ShellExecuteEx() does not support CREATE_BREAKAWAY_FROM_JOB flag.
-         * CreateProcess() supports CREATE_BREAKAWAY_FROM_JOB flag but do not support
-         * "runas" option.
-         *
-         * Hence, if we are running in a job, just assume whoever created that job knows
-         * how to take care of "dangling" processes.
-         */
-        if (in_job == FALSE)
+        if (process != INVALID_HANDLE_VALUE)
         {
-            if (data->job_handle == INVALID_HANDLE_VALUE)
-            {
-                JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+            IsProcessInJob(process, NULL, &in_job);
 
-                data->job_handle = CreateJobObject(NULL, NULL);
-                if (data->job_handle == NULL)
+            /* If we are running inside Visual Studio debug session newly created process is
+             * already in a job (assume that the job does not allow processes to break from it).
+             *
+             * Unfortunately ShellExecuteEx() does not support CREATE_BREAKAWAY_FROM_JOB flag.
+             * CreateProcess() supports CREATE_BREAKAWAY_FROM_JOB flag but do not support
+             * "runas" option.
+             *
+             * Hence, if we are running in a job, just assume whoever created that job knows
+             * how to take care of "dangling" processes.
+             */
+            if (in_job == FALSE)
+            {
+                if (data->job_handle == INVALID_HANDLE_VALUE)
                 {
-                    printf("Failed to create job object!\n");
-                    data->process = FALSE;
-                    data->job_handle = INVALID_HANDLE_VALUE;
-                    return;
+                    JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+
+                    data->job_handle = CreateJobObject(NULL, NULL);
+                    if (data->job_handle == NULL)
+                    {
+                        printf("Failed to create job object!\n");
+                        data->process = FALSE;
+                        data->job_handle = INVALID_HANDLE_VALUE;
+                        return;
+                    }
+
+                    memset(&info, 0, sizeof(info));
+                    info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                    SetInformationJobObject(data->job_handle, JobObjectExtendedLimitInformation, &info, sizeof(info));
                 }
 
-                memset(&info, 0, sizeof(info));
-                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-                SetInformationJobObject(data->job_handle, JobObjectExtendedLimitInformation, &info, sizeof(info));
+                if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+                {
+                    printf("Failed to Assign process to job object - %d\n",
+                           GetLastError());
+                    TerminateProcess(process, 0);
+                    CloseHandle(process);
+                    return;
+                }
             }
 
-            if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+            if (strncmp("-", data->filename, 2) == 0)
             {
-                printf("Failed to Assign process to job object - %d\n",
-                       GetLastError());
-                TerminateProcess(process, 0);
-                CloseHandle(process);
-                return;
+                data->write_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+                data->read_handle = pipe_handle;
+
+                thread = CreateThread(NULL, /* default security attributes */
+                                      0,    /* use default stack size */
+                                      read_thread,
+                                      &data,
+                                      0,    /* use default creation flag */
+                                      &thread_id);
             }
-        }
-
-        if (strncmp("-", data->filename, 2) == 0)
-        {
-            data->write_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-            data->read_handle = pipe_handle;
-
-            thread = CreateThread(NULL, /* default security attributes */
-                                  0,    /* use default stack size */
-                                  read_thread,
-                                  &data,
-                                  0,    /* use default creation flag */
-                                  &thread_id);
+            else
+            {
+                /* Worker process saves directly to file */
+                data->write_handle = INVALID_HANDLE_VALUE;
+                data->read_handle = INVALID_HANDLE_VALUE;
+            }
         }
         else
         {
-            /* Worker process saves directly to file */
-            data->write_handle = INVALID_HANDLE_VALUE;
-            data->read_handle = INVALID_HANDLE_VALUE;
+            /* Elevated worker couldn't be started. */
+            data->process = FALSE;
         }
     }
 
