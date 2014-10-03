@@ -549,33 +549,51 @@ static void start_capture(struct thread_data *data)
     }
     else
     {
+        BOOL in_job = FALSE;
+
         /* We are not elevated. Create elevated worker process. */
-        if (data->job_handle == INVALID_HANDLE_VALUE)
-        {
-            JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
-
-            data->job_handle = CreateJobObject(NULL, NULL);
-            if (data->job_handle == NULL)
-            {
-                printf("Failed to create job object!\n");
-                data->process = FALSE;
-                data->job_handle = INVALID_HANDLE_VALUE;
-                return;
-            }
-
-            memset(&info, 0, sizeof(info));
-            info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-            SetInformationJobObject(data->job_handle, JobObjectExtendedLimitInformation, &info, sizeof(info));
-        }
-
         process = create_elevated_worker(data->device, data->filename, data->bufferlen, &pipe_handle);
 
-        if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+        IsProcessInJob(process, NULL, &in_job);
+
+        /* If we are running inside Visual Studio debug session newly created process is
+         * already in a job (assume that the job does not allow processes to break from it).
+         *
+         * Unfortunately ShellExecuteEx() does not support CREATE_BREAKAWAY_FROM_JOB flag.
+         * CreateProcess() supports CREATE_BREAKAWAY_FROM_JOB flag but do not support
+         * "runas" option.
+         *
+         * Hence, if we are running in a job, just assume whoever created that job knows
+         * how to take care of "dangling" processes.
+         */
+        if (in_job == FALSE)
         {
-            printf("Failed to Assign process to job object!\n");
-            TerminateProcess(process, 0);
-            CloseHandle(process);
-            return;
+            if (data->job_handle == INVALID_HANDLE_VALUE)
+            {
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+
+                data->job_handle = CreateJobObject(NULL, NULL);
+                if (data->job_handle == NULL)
+                {
+                    printf("Failed to create job object!\n");
+                    data->process = FALSE;
+                    data->job_handle = INVALID_HANDLE_VALUE;
+                    return;
+                }
+
+                memset(&info, 0, sizeof(info));
+                info.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+                SetInformationJobObject(data->job_handle, JobObjectExtendedLimitInformation, &info, sizeof(info));
+            }
+
+            if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+            {
+                printf("Failed to Assign process to job object - %d\n",
+                       GetLastError());
+                TerminateProcess(process, 0);
+                CloseHandle(process);
+                return;
+            }
         }
 
         if (strncmp("-", data->filename, 2) == 0)
