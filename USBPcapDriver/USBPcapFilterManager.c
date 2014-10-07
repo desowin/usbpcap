@@ -132,7 +132,8 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
                 pDeviceData->pRootData->snaplen = USBPCAP_DEFAULT_SNAP_LEN;
 
                 /* Setup initial filtering state to FALSE */
-                pDeviceData->pRootData->filtered = FALSE;
+                memset(&pDeviceData->pRootData->filter, 0,
+                       sizeof(USBPCAP_ADDRESS_FILTER));
 
                 /*
                  * Set the reference count

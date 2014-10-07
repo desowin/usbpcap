@@ -67,13 +67,33 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             }
 
             case IOCTL_USBPCAP_START_FILTERING:
+            {
+                PUSBPCAP_ADDRESS_FILTER pAddressFilter;
+
+                if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                    sizeof(USBPCAP_ADDRESS_FILTER))
+                {
+                    ntStat = STATUS_INVALID_PARAMETER;
+                    break;
+                }
+
+                pAddressFilter = (PUSBPCAP_ADDRESS_FILTER)pIrp->AssociatedIrp.SystemBuffer;
+                memcpy(&pRootData->filter, pAddressFilter,
+                       sizeof(USBPCAP_ADDRESS_FILTER));
+
                 DkDbgStr("IOCTL_USBPCAP_START_FILTERING");
-                pRootData->filtered = TRUE;
+                DkDbgVal("", pAddressFilter->addresses[0]);
+                DkDbgVal("", pAddressFilter->addresses[1]);
+                DkDbgVal("", pAddressFilter->addresses[2]);
+                DkDbgVal("", pAddressFilter->addresses[3]);
+                DkDbgVal("", pAddressFilter->filterAll);
                 break;
+            }
 
             case IOCTL_USBPCAP_STOP_FILTERING:
                 DkDbgStr("IOCTL_USBPCAP_STOP_FILTERING");
-                pRootData->filtered = FALSE;
+                memset(&pRootData->filter, 0,
+                       sizeof(USBPCAP_ADDRESS_FILTER));
                 break;
 
             case IOCTL_USBPCAP_GET_HUB_SYMLINK:

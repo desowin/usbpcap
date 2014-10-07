@@ -33,7 +33,6 @@
 #include <Usbiodef.h>
 #include "filters.h"
 #include "thread.h"
-#include "USBPcap.h"
 #include "enum.h"
 #include "gopt.h"
 #include "roothubs.h"
@@ -231,14 +230,13 @@ EXTERN_C int WINAPI GetModuleFullName(__in HMODULE hModule, __out LPWSTR pszBuff
 /**
  *  Creates elevated worker process.
  *
- *  \param[in] device USBPcap control device path
- *  \param[in] filename Output filename (or "-" for standard output)
+ *  \param[in] data thread_data containing capture configuration
  *  \param[out] pcap_handle handle to pcap pipe (used if filename is "-"),
  *              if not writing to standard output it is set to INVALID_HANDLE_VALUE.
  *
  *  \return Handle to created process.
  */
-static HANDLE create_elevated_worker(char *device, char *filename, UINT32 bufferlen, HANDLE *pcap_handle)
+static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_handle)
 {
     PWSTR exePath;
     int exePathLen;
@@ -247,6 +245,7 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
     int cmdLineLen;
     PWSTR pipeName = NULL;
     SHELLEXECUTEINFOW exInfo = { 0 };
+    int nChars;
 
     *pcap_handle = INVALID_HANDLE_VALUE;
 
@@ -261,11 +260,11 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
 
     GetModuleFullName(NULL, exePath, exePathLen, NULL);
 
-    if (strncmp(filename, "-", 2) == 0)
+    if (strncmp(data->filename, "-", 2) == 0)
     {
         /* Need to create pipe */
         WCHAR *tmp;
-        int nChars = sizeof("\\\\.\\pipe\\") + strlen(device) + 1;
+        int nChars = sizeof("\\\\.\\pipe\\") + strlen(data->device) + 1;
         pipeName = malloc((nChars + 1) * sizeof(WCHAR));
         if (pipeName == NULL)
         {
@@ -273,7 +272,7 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
             free(exePath);
             return INVALID_HANDLE_VALUE;
         }
-        swprintf(pipeName, L"\\\\.\\pipe\\%S", device);
+        swprintf_s(pipeName, nChars,  L"\\\\.\\pipe\\%S", data->device);
         for (tmp = &pipeName[sizeof("\\\\.\\pipe\\")]; *tmp; tmp++)
         {
             if (*tmp == L'\\')
@@ -291,7 +290,7 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
                                         PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
                                         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                                         2 /* Max instances of pipe */,
-                                        bufferlen, bufferlen,
+                                        data->bufferlen, data->bufferlen,
                                         0, NULL);
 
 
@@ -308,16 +307,24 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
         *pcap_handle = INVALID_HANDLE_VALUE;
     }
 
-#define WORKER_CMD_LINE_FORMATTER      L"-d %S -b %d -o %S"
-#define WORKER_CMD_LINE_FORMATTER_PIPE L"-d %S -b %d -o %s"
-    cmdLineLen = MultiByteToWideChar(CP_ACP, 0, device, -1, NULL, 0);
-    cmdLineLen += (pipeName == NULL) ? strlen(filename) : wcslen(pipeName);
+#define WORKER_CMD_LINE_FORMATTER             L"-d %S -b %d -o %S"
+#define WORKER_CMD_LINE_FORMATTER_PIPE        L"-d %S -b %d -o %s"
+
+#define WORKER_CMD_LINE_FORMATTER_DEVICES     L" --devices %S"
+#define WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL L" --capture-from-all-devices"
+#define WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW L" --capture-from-new-devices"
+
+    cmdLineLen = MultiByteToWideChar(CP_ACP, 0, data->device, -1, NULL, 0);
+    cmdLineLen += (pipeName == NULL) ? strlen(data->filename) : wcslen(pipeName);
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER);
     cmdLineLen += 9 /* maximum bufferlen in characters */;
     cmdLineLen += 1 /* NULL termination */;
-    cmdLineLen *= sizeof(WCHAR);
+    cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_DEVICES);
+    cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL);
+    cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
+    cmdLineLen += (data->address_list == NULL) ? 0 : strlen(data->address_list);
 
-    cmdLine = (PWSTR)malloc(cmdLineLen);
+    cmdLine = (PWSTR)malloc(cmdLineLen * sizeof(WCHAR));
 
     if (cmdLine == NULL)
     {
@@ -329,22 +336,50 @@ static HANDLE create_elevated_worker(char *device, char *filename, UINT32 buffer
 
     if (pipeName == NULL)
     {
-        swprintf(cmdLine,
-                 WORKER_CMD_LINE_FORMATTER,
-                 device,
-                 bufferlen,
-                 filename);
+        nChars = swprintf_s(cmdLine,
+                            cmdLineLen,
+                            WORKER_CMD_LINE_FORMATTER,
+                            data->device,
+                            data->bufferlen,
+                            data->filename);
     }
     else
     {
-        swprintf(cmdLine,
-                 WORKER_CMD_LINE_FORMATTER_PIPE,
-                 device,
-                 bufferlen,
-                 pipeName);
+        nChars = swprintf_s(cmdLine,
+                            cmdLineLen,
+                            WORKER_CMD_LINE_FORMATTER_PIPE,
+                            data->device,
+                            data->bufferlen,
+                            pipeName);
+    }
+
+    if (data->address_list != NULL)
+    {
+        nChars += swprintf_s(&cmdLine[nChars],
+                             cmdLineLen - nChars,
+                             WORKER_CMD_LINE_FORMATTER_DEVICES,
+                             data->address_list);
+    }
+
+    if (data->capture_all)
+    {
+        nChars += swprintf_s(&cmdLine[nChars],
+                             cmdLineLen - nChars,
+                             WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL);
+    }
+
+    if (data->capture_new)
+    {
+        nChars += swprintf_s(&cmdLine[nChars],
+                             cmdLineLen - nChars,
+                           WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
     }
 #undef WORKER_CMD_LINE_FORMATTER_PIPE
 #undef WORKER_CMD_LINE_FORMATTER
+
+#undef WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW
+#undef WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL
+#undef WORKER_CMD_LINE_FORMATTER_DEVICES
 
     exInfo.cbSize = sizeof(exInfo);
     exInfo.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NO_CONSOLE;
@@ -390,6 +425,7 @@ int cmd_interactive(struct thread_data *data)
     BOOL exit = FALSE;
 
     data->filename = NULL;
+    data->capture_all = TRUE;
 
     filters_initialize();
     if (usbpcapFilters[0] == NULL)
@@ -559,7 +595,7 @@ static void start_capture(struct thread_data *data)
         BOOL in_job = FALSE;
 
         /* We are not elevated. Create elevated worker process. */
-        process = create_elevated_worker(data->device, data->filename, data->bufferlen, &pipe_handle);
+        process = create_elevated_worker(data, &pipe_handle);
 
         if (process != INVALID_HANDLE_VALUE)
         {
@@ -904,8 +940,8 @@ int __cdecl main(int argc, CHAR **argv)
         {'5', 0, "", _5_long},
         {'6', GOPT_ARG, "", _6_long},
 
-        {'7', 0, "", _7_long},
-        {'8', 0, "", _8_long},
+        {'7', GOPT_ARG, "", _7_long},
+        {'8', 0, "A", _8_long},
         {'9', 0, "", _9_long},
         {0},
     };
@@ -914,6 +950,12 @@ int __cdecl main(int argc, CHAR **argv)
 
     data.filename = NULL;
     data.device = NULL;
+    if (!gopt_arg(options, '7', &data.address_list))
+    {
+        data.address_list = NULL;
+    }
+    data.capture_all = gopt(options, '8') ? TRUE : FALSE;
+    data.capture_new = gopt(options, '9') ? TRUE : FALSE;
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
@@ -931,6 +973,11 @@ int __cdecl main(int argc, CHAR **argv)
                "    Sets snapshot length.\n"
                "  -b <len>, --bufferlen <len>\n"
                "    Sets internal capture buffer length. Valid range <4096,134217728>.\n"
+               "  -A, --capture-from-all-devices\n"
+               "    Captures data from all devices connected to selected Root Hub.\n"
+               "  --devices <list>\n"
+               "    Captures data only from devices with addresses present in list.\n"
+               "    List is comma separated list of values. Example --devices 1,2,3.\n"
                "  -I,  --init-non-standard-hwids\n"
                "    Initializes NonStandardHWIDs registry key used by USBPcapDriver.\n"
                "    This registry key is needed for USB 3.0 capture.\n");

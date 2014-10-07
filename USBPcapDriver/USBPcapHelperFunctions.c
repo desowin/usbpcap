@@ -705,11 +705,20 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
 
     if (NT_SUCCESS(status))
     {
+        PUSBPCAP_ROOTHUB_DATA pRootData;
+
         DkDbgVal("", info.DeviceAddress);
 
         pDevExt->context.usb.pDeviceData->properData    = TRUE;
         pDevExt->context.usb.pDeviceData->isHub         = info.DeviceIsHub;
         pDevExt->context.usb.pDeviceData->deviceAddress = info.DeviceAddress;
+
+        /* Set device filtered if capture from new devices is enabled. */
+        pRootData = pDevExt->context.usb.pDeviceData->pRootData;
+        if (USBPcapIsDeviceFiltered(&pRootData->filter, 0))
+        {
+            USBPcapSetDeviceFiltered(&pRootData->filter, info.DeviceAddress);
+        }
     }
     else
     {
@@ -956,5 +965,67 @@ PWSTR USBPcapGetHubInterfaces(PDEVICE_OBJECT hub)
     }
 
     return interfaces;
+}
+
+/*
+ * Determines range and index for given address.
+ *
+ * Returns TRUE on success (address is within <0; 127>), FALSE otherwise.
+ */
+static BOOLEAN USBPcapGetAddressRangeAndIndex(int address, UINT8 *range, UINT8 *index)
+{
+    if ((address < 0) || (address > 127))
+    {
+        DkDbgVal("Invalid address!", address);
+        return FALSE;
+    }
+
+    *range = address / 32;
+    *index = address % 32;
+    return TRUE;
+}
+
+BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address)
+{
+    BOOLEAN filtered = FALSE;
+    UINT8 range;
+    UINT8 index;
+
+    ASSERT(filter != NULL);
+
+    if (filter->filterAll == TRUE)
+    {
+        /* Do not check individual bit if all devices are filtered. */
+        return TRUE;
+    }
+
+    if (USBPcapGetAddressRangeAndIndex(address, &range, &index) == FALSE)
+    {
+        /* Assume that invalid addresses are filtered. */
+        return TRUE;
+    }
+
+    if (filter->addresses[range] & (1 << index))
+    {
+        filtered = TRUE;
+    }
+
+    return filtered;
+}
+
+BOOLEAN USBPcapSetDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address)
+{
+    UINT8 range;
+    UINT8 index;
+
+    ASSERT(filter != NULL);
+
+    if (USBPcapGetAddressRangeAndIndex(address, &range, &index) == FALSE)
+    {
+        return FALSE;
+    }
+
+    filter->addresses[range] |= (1 << index);
+    return TRUE;
 }
 

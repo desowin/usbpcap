@@ -41,8 +41,8 @@ typedef struct _USBPCAP_ROOTHUB_DATA
     /* Snapshot length */
     UINT32                 snaplen;
 
-    /* TRUE if the roothub data is being monitored */
-    volatile BOOLEAN       filtered;
+    /* Address filter. See include\USBPcap.h for more information. */
+    USBPCAP_ADDRESS_FILTER filter;
 
     /* Reference count. To be used only with InterlockedXXX calls. */
     volatile LONG          refCount;

@@ -18,6 +18,7 @@
 #include "USBPcapURB.h"
 #include "USBPcapTables.h"
 #include "USBPcapBuffer.h"
+#include "USBPcapHelperFunctions.h"
 
 #include <stddef.h> /* Required for offsetof macro */
 
@@ -367,9 +368,10 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             break;
     }
 
-    if (pDeviceData->pRootData->filtered == FALSE)
+    if (USBPcapIsDeviceFiltered(&pDeviceData->pRootData->filter,
+                                (int)pDeviceData->deviceAddress) == FALSE)
     {
-        /* Do not log URBs when roothub is not being filtered */
+        /* Do not log URBs from devices which are not being filtered */
         return;
     }
 

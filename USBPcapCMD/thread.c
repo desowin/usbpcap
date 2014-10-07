@@ -23,20 +23,33 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
-#include <windows.h>
-#include <winioctl.h>
+#include <devioctl.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <wtypes.h>
 #include "USBPcap.h"
 #include "thread.h"
+#include "iocontrol.h"
 
 HANDLE create_filter_read_handle(struct thread_data *data)
 {
     HANDLE filter_handle = INVALID_HANDLE_VALUE;
+    USBPCAP_ADDRESS_FILTER filter;
     char* inBuf = NULL;
     DWORD inBufSize = 0;
     DWORD bytes_ret;
     DWORD ioctl;
+
+    if (FALSE == USBPcapInitAddressFilter(&filter, data->address_list, data->capture_all))
+    {
+        printf("USBPcapInitAddressFilter failed!\n");
+        goto finish;
+    }
+
+    if (data->capture_new)
+    {
+        USBPcapSetDeviceFiltered(&filter, 0);
+    }
 
     filter_handle = CreateFileA(data->device,
                                 GENERIC_READ|GENERIC_WRITE|FILE_FLAG_OVERLAPPED,
@@ -90,8 +103,8 @@ HANDLE create_filter_read_handle(struct thread_data *data)
 
     if (!DeviceIoControl(filter_handle,
                          IOCTL_USBPCAP_START_FILTERING,
-                         inBuf,
-                         inBufSize,
+                         (char*)&filter,
+                         sizeof(filter),
                          NULL,
                          0,
                          &bytes_ret,
