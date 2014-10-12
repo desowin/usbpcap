@@ -656,6 +656,15 @@ static void start_capture(struct thread_data *data)
     HANDLE thread = NULL;
     DWORD thread_id;
 
+    /* Sanity check capture configuration. */
+    if ((data->capture_all == FALSE) &&
+        (data->capture_new == FALSE) &&
+        (data->address_list == NULL))
+    {
+        fprintf(stderr, "Selected capture options result in empty capture.\n");
+        return;
+    }
+
     if (IsElevated() == TRUE)
     {
         data->read_handle = INVALID_HANDLE_VALUE;
