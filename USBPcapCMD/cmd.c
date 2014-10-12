@@ -969,11 +969,11 @@ int print_extcap_options(const char *device)
     printf("arg {number=2}{call=--capture-from-all-devices}"
            "{display=Capture from all devices connected}"
            "{tooltip=Capture from all devices connected despite other options}"
-           "{type=boolflag}\n");
+           "{type=boolflag}{default=true}\n");
     printf("arg {number=3}{call=--capture-from-new-devices}"
            "{display=Capture from newly connected devices}"
            "{tooltip=Automatically start capture on all newly connected devices}"
-           "{type=boolflag}\n");
+           "{type=boolflag}{default=true}\n");
     printf("arg {number=%d}{call=--devices}{display=Attached USB Devices}{tooltip=Select individual devices to capture from}{type=multicheck}\n",
            EXTCAP_ARGNUM_MULTICHECK);
 
