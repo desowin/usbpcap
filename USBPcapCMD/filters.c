@@ -189,7 +189,7 @@ static BOOL find_usbpcap_filters(struct list *list,
 
     if (info == NULL)
     {
-        printf("HeapAlloc() failed\n");
+        fprintf(stderr, "HeapAlloc() failed\n");
         return FALSE;
     }
 
@@ -198,7 +198,7 @@ static BOOL find_usbpcap_filters(struct list *list,
                                    &attr);
     if (status != 0)
     {
-        printf("NtOpenDirectoryObject() failed\n");
+        fprintf(stderr, "NtOpenDirectoryObject() failed\n");
         HeapFree(GetProcessHeap(), 0, info);
         return FALSE;
     }
@@ -213,7 +213,7 @@ static BOOL find_usbpcap_filters(struct list *list,
 
     if (status != 0)
     {
-        printf("NtQueryDirectoryObject() failed\n");
+        fprintf(stderr, "NtQueryDirectoryObject() failed\n");
         HeapFree(GetProcessHeap(), 0, info);
         return FALSE;
     }
@@ -367,7 +367,7 @@ BOOL is_usbpcap_upper_filter_installed()
 
     if (regVal != ERROR_SUCCESS)
     {
-        printf("Failed to open USB Class registry key! Code %d\n", regVal);
+        fprintf(stderr, "Failed to open USB Class registry key! Code %d\n", regVal);
         return FALSE;
     }
 
@@ -376,14 +376,14 @@ BOOL is_usbpcap_upper_filter_installed()
 
     if (regVal != ERROR_SUCCESS)
     {
-        printf("Failed to query UpperFilters value size! Code %d\n", regVal);
+        fprintf(stderr, "Failed to query UpperFilters value size! Code %d\n", regVal);
         RegCloseKey(hkey);
         return FALSE;
     }
 
     if (type != REG_MULTI_SZ)
     {
-        printf("Invalid UpperFilters type (%d)!\n", type);
+        fprintf(stderr, "Invalid UpperFilters type (%d)!\n", type);
         RegCloseKey(hkey);
         return FALSE;
     }
@@ -400,7 +400,7 @@ BOOL is_usbpcap_upper_filter_installed()
 
     if (regVal != ERROR_SUCCESS)
     {
-        printf("Failed to read UpperFilters value! Code %d\n", regVal);
+        fprintf(stderr, "Failed to read UpperFilters value! Code %d\n", regVal);
         free(multisz);
         RegCloseKey(hkey);
         return FALSE;

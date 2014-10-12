@@ -42,7 +42,7 @@ HANDLE create_filter_read_handle(struct thread_data *data)
 
     if (FALSE == USBPcapInitAddressFilter(&filter, data->address_list, data->capture_all))
     {
-        printf("USBPcapInitAddressFilter failed!\n");
+        fprintf(stderr, "USBPcapInitAddressFilter failed!\n");
         goto finish;
     }
 
@@ -61,7 +61,7 @@ HANDLE create_filter_read_handle(struct thread_data *data)
 
     if (filter_handle == INVALID_HANDLE_VALUE)
     {
-        printf("Couldn't open device - %d\n", GetLastError());
+        fprintf(stderr, "Couldn't open device - %d\n", GetLastError());
         goto finish;
     }
 
@@ -78,7 +78,7 @@ HANDLE create_filter_read_handle(struct thread_data *data)
                          &bytes_ret,
                          0))
     {
-        printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
+        fprintf(stderr, "DeviceIoControl failed with %d status (supplimentary code %d)\n",
                 GetLastError(),
                 bytes_ret);
         goto finish;
@@ -95,7 +95,7 @@ HANDLE create_filter_read_handle(struct thread_data *data)
                          &bytes_ret,
                          0))
     {
-        printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
+        fprintf(stderr, "DeviceIoControl failed with %d status (supplimentary code %d)\n",
                 GetLastError(),
                 bytes_ret);
         goto finish;
@@ -110,8 +110,8 @@ HANDLE create_filter_read_handle(struct thread_data *data)
                          &bytes_ret,
                          0))
     {
-        printf("DeviceIoControl failed with %d status (supplimentary code %d)\n",
-               GetLastError(),
+        fprintf(stderr, "DeviceIoControl failed with %d status (supplimentary code %d)\n",
+                GetLastError(),
                bytes_ret);
         goto finish;
     }
@@ -143,20 +143,20 @@ DWORD WINAPI read_thread(LPVOID param)
     buffer = malloc(data->bufferlen);
     if (buffer == NULL)
     {
-        printf("Failed to allocate user-mode buffer (length %d)\n",
-               data->bufferlen);
+        fprintf(stderr, "Failed to allocate user-mode buffer (length %d)\n",
+                data->bufferlen);
         goto finish;
     }
 
     if (data->read_handle == INVALID_HANDLE_VALUE)
     {
-        printf("Thread started with invalid read handle!\n");
+        fprintf(stderr, "Thread started with invalid read handle!\n");
         goto finish;
     }
 
     if (data->write_handle == INVALID_HANDLE_VALUE)
     {
-        printf("Thread started with invalid write handle!\n");
+        fprintf(stderr, "Thread started with invalid write handle!\n");
         goto finish;
     }
 

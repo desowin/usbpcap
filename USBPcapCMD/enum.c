@@ -22,7 +22,7 @@
 #define IOCTL_OUTPUT_BUFFER_SIZE 1024
 
 #if DBG
-#define OOPS() printf("Oops in file %s line %d\n", __FILE__, __LINE__);
+#define OOPS() fprintf(stderr, "Oops in file %s line %d\n", __FILE__, __LINE__);
 #else
 #define OOPS()
 #endif
@@ -833,7 +833,7 @@ static void EnumerateHub(PTSTR hub,
 
     if (hHubDevice == INVALID_HANDLE_VALUE)
     {
-        printf("unable to open %s\n", hub);
+        fprintf(stderr, "unable to open %s\n", hub);
         OOPS();
         goto EnumerateHubError;
     }
@@ -895,7 +895,7 @@ void enumerate_attached_devices(const char *filter, EnumerationType enumType)
 
     if (filter_handle == INVALID_HANDLE_VALUE)
     {
-        printf("Couldn't open device - %d\n", GetLastError());
+        fprintf(stderr, "Couldn't open device - %d\n", GetLastError());
         return;
     }
 

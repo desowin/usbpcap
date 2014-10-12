@@ -142,14 +142,14 @@ static void set_non_standard_hwids_reg_key(PTSTR multi_sz, int length)
 
         if (regVal != ERROR_SUCCESS)
         {
-            printf("Failed to set NonStandardHWIDs value\n");
+            fprintf(stderr, "Failed to set NonStandardHWIDs value\n");
         }
 
         RegCloseKey(hkey);
     }
     else
     {
-        printf("Failed to open USBPcap service key\n");
+        fprintf(stderr, "Failed to open USBPcap service key\n");
     }
 }
 
@@ -359,7 +359,7 @@ void restart_device(HDEVINFO devs,
     if (!SetupDiSetClassInstallParams(devs, devInfo, &pcp.ClassInstallHeader, sizeof(pcp)) ||
         !SetupDiCallClassInstaller(DIF_PROPERTYCHANGE, devs, devInfo))
     {
-        printf("Failed to invoke DIF_PROPERTYCHANGE! Please reboot.\n");
+        fprintf(stderr, "Failed to invoke DIF_PROPERTYCHANGE! Please reboot.\n");
     }
     else
     {
@@ -393,14 +393,14 @@ static void foreach_host_controller(
 
     if(devs == INVALID_HANDLE_VALUE)
     {
-        printf("SetupDiCreateDeviceInfoListEx() failed\n");
+        fprintf(stderr, "SetupDiCreateDeviceInfoListEx() failed\n");
         goto final;
     }
 
     devInfoListDetail.cbSize = sizeof(devInfoListDetail);
     if (!SetupDiGetDeviceInfoListDetail(devs, &devInfoListDetail))
     {
-        printf("SetupDiGetDeviceInfoListDetail() failed\n");
+        fprintf(stderr, "SetupDiGetDeviceInfoListDetail() failed\n");
         goto final;
     }
 

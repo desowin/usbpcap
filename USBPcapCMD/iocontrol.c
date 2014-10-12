@@ -37,7 +37,7 @@ static BOOLEAN USBPcapGetAddressRangeAndIndex(int address, UINT8 *range, UINT8 *
 {
     if ((address < 0) || (address > 127))
     {
-        printf("Invalid address: %d\n", address);
+        fprintf(stderr, "Invalid address: %d\n", address);
         return FALSE;
     }
 
@@ -134,7 +134,7 @@ BOOLEAN USBPcapInitAddressFilter(PUSBPCAP_ADDRESS_FILTER filter, PCHAR list, BOO
             }
             else
             {
-                printf("Malformed address list. Invalid character: %c.\n", *list);
+                fprintf(stderr, "Malformed address list. Invalid character: %c.\n", *list);
                 return FALSE;
             }
         }

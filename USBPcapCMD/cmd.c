@@ -254,7 +254,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
 
     if (exePath == NULL)
     {
-        printf("Failed to get module path\n");
+        fprintf(stderr, "Failed to get module path\n");
         return INVALID_HANDLE_VALUE;
     }
 
@@ -268,7 +268,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
         pipeName = malloc((nChars + 1) * sizeof(WCHAR));
         if (pipeName == NULL)
         {
-            printf("Failed to allocate pipe name\n");
+            fprintf(stderr, "Failed to allocate pipe name\n");
             free(exePath);
             return INVALID_HANDLE_VALUE;
         }
@@ -296,7 +296,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
 
         if (*pcap_handle == INVALID_HANDLE_VALUE)
         {
-            printf("Failed to create named pipe - %d\n", GetLastError());
+            fprintf(stderr, "Failed to create named pipe - %d\n", GetLastError());
             free(exePath);
             free(pipeName);
             return INVALID_HANDLE_VALUE;
@@ -328,7 +328,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
 
     if (cmdLine == NULL)
     {
-        printf("Failed to allocate command line\n");
+        fprintf(stderr, "Failed to allocate command line\n");
         free(exePath);
         free(pipeName);
         return INVALID_HANDLE_VALUE;
@@ -408,7 +408,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
             CloseHandle(*pcap_handle);
             *pcap_handle = INVALID_HANDLE_VALUE;
         }
-        printf("Failed to create worker process!\n");
+        fprintf(stderr, "Failed to create worker process!\n");
         return INVALID_HANDLE_VALUE;
     }
 
@@ -586,7 +586,7 @@ static void start_capture(struct thread_data *data)
 
         if (thread == NULL)
         {
-            printf("Failed to create thread\n");
+            fprintf(stderr, "Failed to create thread\n");
             data->process = FALSE;
         }
     }
@@ -620,7 +620,7 @@ static void start_capture(struct thread_data *data)
                     data->job_handle = CreateJobObject(NULL, NULL);
                     if (data->job_handle == NULL)
                     {
-                        printf("Failed to create job object!\n");
+                        fprintf(stderr, "Failed to create job object!\n");
                         data->process = FALSE;
                         data->job_handle = INVALID_HANDLE_VALUE;
                         return;
@@ -633,8 +633,8 @@ static void start_capture(struct thread_data *data)
 
                 if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
                 {
-                    printf("Failed to Assign process to job object - %d\n",
-                           GetLastError());
+                    fprintf(stderr, "Failed to Assign process to job object - %d\n",
+                            GetLastError());
                     TerminateProcess(process, 0);
                     CloseHandle(process);
                     return;
@@ -1020,7 +1020,7 @@ int __cdecl main(int argc, CHAR **argv)
         data.snaplen = atol(tmp);
         if (data.snaplen == 0)
         {
-            printf("Invalid snapshot length!\n");
+            fprintf(stderr, "Invalid snapshot length!\n");
             return -1;
         }
     }
@@ -1031,8 +1031,8 @@ int __cdecl main(int argc, CHAR **argv)
         /* Minimum buffer size if 4 KiB, maximum 128 MiB */
         if (data.bufferlen < 4096 || data.bufferlen > 134217728)
         {
-            printf("Invalid buffer length! "
-                   "Valid range <4096,134217728>.\n");
+            fprintf(stderr, "Invalid buffer length! "
+                            "Valid range <4096,134217728>.\n");
             return -1;
         }
     }
