@@ -226,25 +226,27 @@ EXTERN_C int WINAPI GetModuleFullName(__in HMODULE hModule, __out LPWSTR pszBuff
     return nLength;
 }
 
-
 /**
- *  Creates elevated worker process.
+ *  Generates command line for worker process.
  *
- *  \param[in] data thread_data containing capture configuration
+ *  \param[in] data thread_data containing capture configuration.
+ *  \param[out] appPath pointer to store application path. Must be freed using free().
+ *  \param[out] appCmdLine commandline for worker process. Must be freed using free().
  *  \param[out] pcap_handle handle to pcap pipe (used if filename is "-"),
  *              if not writing to standard output it is set to INVALID_HANDLE_VALUE.
  *
- *  \return Handle to created process.
+ * \return BOOL TRUE on success, FALSE otherwise.
  */
-static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_handle)
+static BOOL generate_worker_command_line(struct thread_data *data,
+                                         PWSTR *appPath,
+                                         PWSTR *appCmdLine,
+                                         HANDLE *pcap_handle)
 {
     PWSTR exePath;
     int exePathLen;
-    BOOL bSuccess = FALSE;
     PWSTR cmdLine = NULL;
     int cmdLineLen;
     PWSTR pipeName = NULL;
-    SHELLEXECUTEINFOW exInfo = { 0 };
     int nChars;
 
     *pcap_handle = INVALID_HANDLE_VALUE;
@@ -255,7 +257,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
     if (exePath == NULL)
     {
         fprintf(stderr, "Failed to get module path\n");
-        return INVALID_HANDLE_VALUE;
+        return FALSE;
     }
 
     GetModuleFullName(NULL, exePath, exePathLen, NULL);
@@ -270,7 +272,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
         {
             fprintf(stderr, "Failed to allocate pipe name\n");
             free(exePath);
-            return INVALID_HANDLE_VALUE;
+            return FALSE;
         }
         swprintf_s(pipeName, nChars,  L"\\\\.\\pipe\\%S", data->device);
         for (tmp = &pipeName[sizeof("\\\\.\\pipe\\")]; *tmp; tmp++)
@@ -299,7 +301,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
             fprintf(stderr, "Failed to create named pipe - %d\n", GetLastError());
             free(exePath);
             free(pipeName);
-            return INVALID_HANDLE_VALUE;
+            return FALSE;
         }
     }
     else
@@ -331,7 +333,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
         fprintf(stderr, "Failed to allocate command line\n");
         free(exePath);
         free(pipeName);
-        return INVALID_HANDLE_VALUE;
+        return FALSE;
     }
 
     if (pipeName == NULL)
@@ -372,7 +374,7 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
     {
         nChars += swprintf_s(&cmdLine[nChars],
                              cmdLineLen - nChars,
-                           WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
+                             WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
     }
 #undef WORKER_CMD_LINE_FORMATTER_PIPE
 #undef WORKER_CMD_LINE_FORMATTER
@@ -381,11 +383,31 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL
 #undef WORKER_CMD_LINE_FORMATTER_DEVICES
 
+    free(pipeName);
+
+    *appPath = exePath;
+    *appCmdLine = cmdLine;
+    return TRUE;
+}
+
+/**
+ *  Creates elevated worker process.
+ *
+ *  \param[in] appPath path to elevated worker module
+ *  \param[in] cmdLine commandline to start elevated worker with
+ *
+ *  \return Handle to created process.
+ */
+static HANDLE create_elevated_worker(PWSTR appPath, PWSTR cmdLine)
+{
+    BOOL bSuccess = FALSE;
+    SHELLEXECUTEINFOW exInfo = { 0 };
+
     exInfo.cbSize = sizeof(exInfo);
     exInfo.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NO_CONSOLE;
     exInfo.hwnd = NULL;
     exInfo.lpVerb = L"runas";
-    exInfo.lpFile = exePath;
+    exInfo.lpFile = appPath;
     exInfo.lpParameters = cmdLine;
     exInfo.lpDirectory = NULL;
     exInfo.nShow = SW_HIDE;
@@ -397,22 +419,99 @@ static HANDLE create_elevated_worker(struct thread_data *data, HANDLE *pcap_hand
 
     bSuccess = ShellExecuteExW(&exInfo);
 
-    free(cmdLine);
-    free(exePath);
-    free(pipeName);
-
     if (FALSE == bSuccess)
     {
-        if (*pcap_handle != INVALID_HANDLE_VALUE)
-        {
-            CloseHandle(*pcap_handle);
-            *pcap_handle = INVALID_HANDLE_VALUE;
-        }
         fprintf(stderr, "Failed to create worker process!\n");
         return INVALID_HANDLE_VALUE;
     }
 
     return exInfo.hProcess;
+}
+
+/**
+ *  Creates intermediate worker process that creates elevated worker process
+ *  inside a job that will terminate all processes on close.
+ *
+ *  On success it modifies data->worker_process_thread handle.
+ *
+ *  \param[inout] data thread_data containing capture configuration.
+ *  \param[in] appPath path to elevated worker module
+ *  \param[in] cmdLine commandline to start elevated worker with
+ *
+ *  \return Handle to created process.
+ */
+static HANDLE create_breakaway_worker_in_job(struct thread_data *data, PWSTR appPath, PWSTR appCmdLine)
+{
+    HANDLE process = INVALID_HANDLE_VALUE;
+    STARTUPINFOW startupInfo;
+    PROCESS_INFORMATION processInfo;
+    PWSTR processCmdLine;
+    int nChars;
+
+    if (data->job_handle == INVALID_HANDLE_VALUE)
+    {
+        fprintf(stderr, "create_breakaway_worker_in_job() cannot be called if data->job_handle is INVALID_HANDLE_VALUE!\n");
+        return INVALID_HANDLE_VALUE;
+    }
+
+    memset(&startupInfo, 0, sizeof(startupInfo));
+    startupInfo.cb = sizeof(startupInfo);
+    startupInfo.dwFlags = STARTF_USESHOWWINDOW;
+    startupInfo.wShowWindow = SW_HIDE;
+
+    /* CreateProcessW works different to ShellExecuteExW.
+     * It will always treat first token of command line as argv[0] in
+     * created process.
+     *
+     * Hence create new string that will contain "appPath" appCmdLine.
+     */
+    nChars = wcslen(appPath) + wcslen(appCmdLine) +
+             4 /* Two quotemarks, one space and NULL-terminator */;
+    processCmdLine = (PWSTR)malloc(nChars * sizeof(WCHAR));
+    if (processCmdLine == NULL)
+    {
+        fprintf(stderr, "Failed to allocate memory for processCmdLine!\n");
+        return INVALID_HANDLE_VALUE;
+    }
+
+    swprintf_s(processCmdLine, nChars, L"\"%s\" %s",
+               appPath, appCmdLine);
+
+    /* We need to breakaway from parent job and assign to data->job_handle. */
+    if (0 == CreateProcessW(NULL, processCmdLine, NULL, NULL, FALSE,
+                            CREATE_BREAKAWAY_FROM_JOB | CREATE_SUSPENDED,
+                            NULL, NULL, &startupInfo, &processInfo))
+    {
+        data->process = FALSE;
+    }
+    else
+    {
+        process = processInfo.hProcess;
+        /* processInfo.hThread needs to be closed. */
+        data->worker_process_thread = processInfo.hThread;
+
+        /* process is not assigned to any job. Assign it. */
+        if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+        {
+            fprintf(stderr, "Failed to Assign process to job object - %d\n",
+                    GetLastError());
+            /* This is fatal error. */
+            CloseHandle(process);
+            CloseHandle(data->worker_process_thread);
+            data->process = FALSE;
+            process = INVALID_HANDLE_VALUE;
+            data->worker_process_thread = INVALID_HANDLE_VALUE;
+        }
+        else
+        {
+            /* Process is assigned to proper job. Resume it. */
+            ResumeThread(data->worker_process_thread);
+        }
+    }
+
+    free(processCmdLine);
+
+    return process;
 }
 
 int cmd_interactive(struct thread_data *data)
@@ -592,26 +691,91 @@ static void start_capture(struct thread_data *data)
     }
     else
     {
+        PWSTR appPath = NULL;
+        PWSTR appCmdLine = NULL;
+
         BOOL in_job = FALSE;
 
-        /* We are not elevated. Create elevated worker process. */
-        process = create_elevated_worker(data, &pipe_handle);
-
-        if (process != INVALID_HANDLE_VALUE)
+        if (FALSE == generate_worker_command_line(data, &appPath, &appCmdLine, &pipe_handle))
         {
-            IsProcessInJob(process, NULL, &in_job);
-
-            /* If we are running inside Visual Studio debug session newly created process is
-             * already in a job (assume that the job does not allow processes to break from it).
-             *
-             * Unfortunately ShellExecuteEx() does not support CREATE_BREAKAWAY_FROM_JOB flag.
-             * CreateProcess() supports CREATE_BREAKAWAY_FROM_JOB flag but do not support
-             * "runas" option.
-             *
-             * Hence, if we are running in a job, just assume whoever created that job knows
-             * how to take care of "dangling" processes.
+            fprintf(stderr, "Failed to generate command line\n");
+            data->process = FALSE;
+        }
+        else
+        {
+            /* Default state is USBPcapCMD running outside any job and hence
+             * we need to create new job to take care of worker processes.
              */
-            if (in_job == FALSE)
+            BOOL needs_breakaway = FALSE;
+            BOOL needs_new_job = TRUE;
+
+            /* We are not elevated. Check if we are running inside a job. */
+            IsProcessInJob(GetCurrentProcess(), NULL, &in_job);
+
+            if (in_job)
+            {
+                /* We are running inside a job. This can be Visual Studio debug session
+                 * job or Windows 8.1 Wireshark job or USBPcap job or anything else.
+                 *
+                 * If the job has JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE, then assume
+                 * that whoever create the job will get care of any dangling processes.
+                 *
+                 * If the job has JOB_OBJECT_LIMIT_BREAKAWAY_OK (which is the case for
+                 * Visual Studio and Windows 8.1 jobs) then we need to create intermediate
+                 * worker to launch elevated worker. The intermediate worker needs to
+                 * break from parent job.
+                 *
+                 * If the job has JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK we could omit
+                 * the intermediate worker, but keep it there so there's no race condion
+                 * (if parent gets terminated after executing elevated worker but before
+                 * the elevated worker is assigned to a job, then the elevated worker
+                 * will need to be manually terminated). If we are not running inside
+                 * a job this race condition is not a problem because we first assign
+                 * our process to a job (and hence all newly created processes are
+                 * automatically assigned to that job).
+                 *
+                 *
+                 * All this is because ShellExecuteEx() does not support
+                 * CREATE_BREAKAWAY_FROM_JOB nor CREATE_SUSPENDED flags.
+                 * CreateProcess() supports CREATE_BREAKAWAY_FROM_JOB and CREATE_SUSPENDED
+                 * flag but do not support "runas" option. USBPcapCMD manifest does not
+                 * require administrator access because that would result in UAC screen
+                 * every time Wireshark gets extcap interface options.
+                 */
+
+                JOBOBJECT_EXTENDED_LIMIT_INFORMATION info;
+
+                memset(&info, 0, sizeof(info));
+                if (0 == QueryInformationJobObject(NULL, JobObjectExtendedLimitInformation,
+                                                   &info, sizeof(info), NULL))
+                {
+                    fprintf(stderr, "Failed to query job information - %d\n", GetLastError());
+                    /* This is fatal error. */
+                    exit(-1);
+                }
+
+                if (info.BasicLimitInformation.LimitFlags & JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE)
+                {
+                    /* There is no need to breakaway nor to create new job. */
+                    needs_breakaway = FALSE;
+                    needs_new_job = FALSE;
+                }
+                else if (info.BasicLimitInformation.LimitFlags &
+                         (JOB_OBJECT_LIMIT_BREAKAWAY_OK | JOB_OBJECT_LIMIT_SILENT_BREAKAWAY_OK))
+                {
+                   needs_breakaway = TRUE;
+                   needs_new_job = TRUE;
+                }
+                else
+                {
+                    fprintf(stderr, "Unhandled job limit flags 0x%08X\n", info.BasicLimitInformation.LimitFlags);
+                    /* This is not fatal. We cannot perform job breakaway though! */
+                    needs_breakaway = FALSE;
+                    needs_new_job = FALSE;
+                }
+            }
+
+            if (needs_new_job)
             {
                 if (data->job_handle == INVALID_HANDLE_VALUE)
                 {
@@ -631,39 +795,68 @@ static void start_capture(struct thread_data *data)
                     SetInformationJobObject(data->job_handle, JobObjectExtendedLimitInformation, &info, sizeof(info));
                 }
 
-                if (AssignProcessToJobObject(data->job_handle, process) == FALSE)
+                /* If breakaway is not needed for worker process, then assign ourselves to newly created job.
+                 * This will result in automatic worker process assignment to newly created job.
+                 */
+                if (needs_breakaway == FALSE)
                 {
-                    fprintf(stderr, "Failed to Assign process to job object - %d\n",
-                            GetLastError());
-                    TerminateProcess(process, 0);
-                    CloseHandle(process);
-                    return;
+                    if (AssignProcessToJobObject(data->job_handle, GetCurrentProcess()) == FALSE)
+                    {
+                        fprintf(stderr, "Failed to Assign process to job object - %d\n",
+                                GetLastError());
+                        /* This is fatal error. */
+                        exit(-1);
+                    }
                 }
             }
 
-            if (strncmp("-", data->filename, 2) == 0)
+            if (needs_breakaway == FALSE)
             {
-                data->write_handle = GetStdHandle(STD_OUTPUT_HANDLE);
-                data->read_handle = pipe_handle;
-
-                thread = CreateThread(NULL, /* default security attributes */
-                                      0,    /* use default stack size */
-                                      read_thread,
-                                      &data,
-                                      0,    /* use default creation flag */
-                                      &thread_id);
+                /* Create elevated worker process. It will automatically be assigned to proper job. */
+                process = create_elevated_worker(appPath, appCmdLine);
             }
             else
             {
-                /* Worker process saves directly to file */
-                data->write_handle = INVALID_HANDLE_VALUE;
-                data->read_handle = INVALID_HANDLE_VALUE;
+                process = create_breakaway_worker_in_job(data, appPath, appCmdLine);
             }
-        }
-        else
-        {
-            /* Elevated worker couldn't be started. */
-            data->process = FALSE;
+
+            /* Free worker path and command line strings as these are no longer needed. */
+            free(appPath);
+            free(appCmdLine);
+            appPath = NULL;
+            appCmdLine = NULL;
+
+            if (process != INVALID_HANDLE_VALUE)
+            {
+                if (strncmp("-", data->filename, 2) == 0)
+                {
+                    data->write_handle = GetStdHandle(STD_OUTPUT_HANDLE);
+                    data->read_handle = pipe_handle;
+
+                    thread = CreateThread(NULL, /* default security attributes */
+                                          0,    /* use default stack size */
+                                          read_thread,
+                                          &data,
+                                          0,    /* use default creation flag */
+                                          &thread_id);
+                }
+                else
+                {
+                    /* Worker process saves directly to file */
+                    data->write_handle = INVALID_HANDLE_VALUE;
+                    data->read_handle = INVALID_HANDLE_VALUE;
+                }
+            }
+            else
+            {
+                /* Worker couldn't be started. */
+                data->process = FALSE;
+                if (pipe_handle != INVALID_HANDLE_VALUE)
+                {
+                    CloseHandle(pipe_handle);
+                    pipe_handle = INVALID_HANDLE_VALUE;
+                }
+            }
         }
     }
 
@@ -959,6 +1152,7 @@ int __cdecl main(int argc, CHAR **argv)
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
+    data.worker_process_thread = INVALID_HANDLE_VALUE;
 
     if (gopt(options, 'h'))
     {
@@ -991,6 +1185,10 @@ int __cdecl main(int argc, CHAR **argv)
     {
         /* Make sure we don't go any further. */
         int ret = cmd_extcap(options, &data);
+        if (data.worker_process_thread != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(data.worker_process_thread);
+        }
         if (data.job_handle != INVALID_HANDLE_VALUE)
         {
             CloseHandle(data.job_handle);
@@ -1076,6 +1274,11 @@ int __cdecl main(int argc, CHAR **argv)
     if (data.filename != NULL)
     {
         free(data.filename);
+    }
+
+    if (data.worker_process_thread != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(data.worker_process_thread);
     }
 
     if (data.job_handle != INVALID_HANDLE_VALUE)
