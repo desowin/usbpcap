@@ -50,8 +50,6 @@ BOOLEAN USBPcapSetDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address);
 #pragma alloc_text (PAGE, USBPcapGetDeviceUSBInfo)
 #pragma alloc_text (PAGE, USBPcapIsDeviceRootHub)
 #pragma alloc_text (PAGE, USBPcapGetHubInterfaces)
-#pragma alloc_text (PAGE, USBPcapIsDeviceFiltered)
-#pragma alloc_text (PAGE, USBPcapSetDeviceFiltered)
 #endif
 
 #endif /* USBPCAP_HELPER_FUNCTIONS_H */

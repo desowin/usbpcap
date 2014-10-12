@@ -191,6 +191,7 @@ static ULONG GetDeviceTypeToUse(PDEVICE_OBJECT pdo)
 
 /////////////////////////////////////////////////////////////////////
 // Functions to attach and detach USB Root HUB filter
+#pragma prefast(suppress: 28152, "Suppress 28152 for path where filter was not created. Please remove this suppression after doing any changes to AddDevice()!")
 NTSTATUS AddDevice(IN PDRIVER_OBJECT pDrvObj,
                    IN PDEVICE_OBJECT pTgtDevObj)
 {

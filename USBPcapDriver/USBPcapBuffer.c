@@ -545,6 +545,7 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
         buffer == NULL)
     {
         DkDbgStr("Attempted to write invalid packet.");
+        KeReleaseSpinLock(&pRootData->bufferLock, irql);
         return STATUS_INVALID_PARAMETER;
     }
 
