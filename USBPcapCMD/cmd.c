@@ -165,7 +165,17 @@ EXTERN_C int WINAPI GetModuleFullName(__in HMODULE hModule, __out LPWSTR pszBuff
                 }
                 else
                 {
-                    pszNew = (LPWSTR)HeapReAlloc(hHeap, 0, pszNew, nSize);
+                    LPWSTR pszTmp;
+                    pszTmp = (LPWSTR)HeapReAlloc(hHeap, 0, pszNew, nSize);
+                    if (pszTmp == NULL)
+                    {
+                        HeapFree(hHeap, 0, pszNew);
+                        pszNew = NULL;
+                    }
+                    else
+                    {
+                        pszNew = pszTmp;
+                    }
                 }
 
                 if (pszNew == NULL)
@@ -1214,12 +1224,18 @@ int __cdecl main(int argc, CHAR **argv)
 
     if (gopt_arg(options, 'd', &tmp))
     {
+#pragma warning(push)
+#pragma warning(disable:28193)
         data.device = _strdup(tmp);
+#pragma warning(pop)
     }
 
     if (gopt_arg(options, 'o', &tmp))
     {
+#pragma warning(push)
+#pragma warning(disable:28193)
         data.filename = _strdup(tmp);
+#pragma warning(pop)
     }
 
     if (gopt_arg(options, 's', &tmp))

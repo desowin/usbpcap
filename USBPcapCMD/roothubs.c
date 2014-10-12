@@ -32,8 +32,17 @@ static void insert_string_array(StringArray *a, LPTSTR hwid)
 {
     if (a->used == a->size)
     {
+        LPTSTR *tmp;
+
         a->size *= 2;
-        a->array = (LPTSTR *)realloc(a->array, a->size * sizeof(LPTSTR));
+        tmp = (LPTSTR *)realloc(a->array, a->size * sizeof(LPTSTR));
+        if (tmp == NULL)
+        {
+            fprintf(stderr, "failed to insert %s to string array!\n",
+                    hwid);
+            return;
+        }
+        a->array = tmp;
     }
 
     a->array[a->used++] = _tcsdup(hwid);
@@ -109,10 +118,7 @@ static PTSTR build_non_standard_reg_multi_sz(StringArray *a,
 
     for (ptr = multi_sz, i = 0; i < a->used; i++)
     {
-#pragma warning(push)
-#pragma warning(disable:4996)
-        _tcscpy(ptr, a->array[i]);
-#pragma warning(pop)
+        _tcscpy_s(ptr, len - (ptr - multi_sz), a->array[i]);
         ptr += _tcslen(a->array[i]) + 1;
     }
 
