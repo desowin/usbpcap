@@ -170,6 +170,10 @@ EXTERN_C int WINAPI GetModuleFullName(__in HMODULE hModule, __out LPWSTR pszBuff
                     if (pszTmp == NULL)
                     {
                         HeapFree(hHeap, 0, pszNew);
+                        if (pszNew == pszBuffer)
+                        {
+                            pszBuffer = NULL;
+                        }
                         pszNew = NULL;
                     }
                     else
