@@ -23,6 +23,8 @@
  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
  */
 
+#define _CRT_SECURE_NO_DEPRECATE
+
 #include <initguid.h>
 #include <windows.h>
 #include <winioctl.h>
@@ -36,7 +38,6 @@
 #include "enum.h"
 #include "gopt.h"
 #include "roothubs.h"
-
 
 #define INPUT_BUFFER_SIZE 1024
 
@@ -536,6 +537,36 @@ int cmd_interactive(struct thread_data *data)
     char buffer[INPUT_BUFFER_SIZE];
     BOOL finished;
     BOOL exit = FALSE;
+
+    /* Detach from parent console window. Make sure to reopen stdout
+     * and stderr as otherwise wide_print() does not corectly detect
+     * console.
+     */
+    FreeConsole();
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
+    /* If we are running interactive then we should show console window.
+     * We are not automatically allocated a console window because the
+     * application type is set to windows. This prevents console
+     * window from showing when USBPcapCMD is used as extcap.
+     * Since extcap is recommended cmd.exe users will notice a slight
+     * inconvenience that USBPcapCMD opens new window.
+     *
+     * Please note that is it impossible to get parent's cmd.exe stdin
+     * handle if application type is not console. The difference is
+     * that in case of console application cmd.exe waits until the
+     * process finishes and in case of windows applications there is
+     * no wait for process termination and the cmd.exe console immadietely
+     * regains standard input functionality.
+     */
+    if (AllocConsole() == FALSE)
+    {
+        return -1;
+    }
+
+    freopen("CONIN$", "r", stdin);
+    freopen("CONOUT$", "w", stdout);
+    freopen("CONOUT$", "w", stderr);
 
     data->filename = NULL;
     data->capture_all = TRUE;
@@ -1102,7 +1133,59 @@ int cmd_extcap(void *options, struct thread_data *data)
     return -1;
 }
 
+BOOLEAN IsHandleRedirected(DWORD handle)
+{
+    HANDLE h = GetStdHandle(handle);
+    if (h)
+    {
+        BY_HANDLE_FILE_INFORMATION fi;
+        if (GetFileInformationByHandle(h, &fi))
+        {
+            return TRUE;
+        }
+    }
+    return FALSE;
+}
+
+static void attach_parent_console()
+{
+    BOOL outRedirected, errRedirected;
+    int outType, errType;
+
+    outRedirected = IsHandleRedirected(STD_OUTPUT_HANDLE);
+    errRedirected = IsHandleRedirected(STD_ERROR_HANDLE);
+
+    if (outRedirected && errRedirected)
+    {
+        /* Both standard output and error handles are redirected.
+         * There is no point in attaching to parent process console.
+         */
+        return;
+    }
+
+    if (AttachConsole(ATTACH_PARENT_PROCESS) == 0)
+    {
+        /* Console attach failed. */
+        return;
+    }
+
+    /* Console attach succeded */
+    if (outRedirected == FALSE)
+    {
+        freopen("CONOUT$", "w", stdout);
+    }
+
+    if (errRedirected == FALSE)
+    {
+        freopen("CONOUT$", "w", stderr);
+    }
+}
+
+#if _MSC_VER >= 1700
+int __cdecl usbpcapcmd_main(int argc, CHAR **argv)
+#else
 int __cdecl main(int argc, CHAR **argv)
+#endif
 {
     void *options;
     const char *tmp;
@@ -1161,6 +1244,8 @@ int __cdecl main(int argc, CHAR **argv)
         {'9', 0, "", _9_long},
         {0},
     };
+
+    attach_parent_console();
 
     options = gopt_sort(&argc, argv, (const void*)opt_specs);
 
@@ -1285,7 +1370,7 @@ int __cdecl main(int argc, CHAR **argv)
 
         if (cmd_interactive(&data) < 0)
         {
-            return 0;
+            return -1;
         }
 
         filters_free();
@@ -1317,3 +1402,13 @@ int __cdecl main(int argc, CHAR **argv)
 
     return 0;
 }
+
+#if _MSC_VER >= 1700
+int CALLBACK WinMain(HINSTANCE hInstance,
+                     HINSTANCE hPrevInstance,
+                     LPSTR lpCmdLine,
+                     int nCmdShow)
+{
+    return usbpcapcmd_main(__argc, __argv);
+}
+#endif
