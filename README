@@ -1,6 +1,6 @@
 USBPcap - USB Packet capture for Windows
 
-There is no end-user release yet.
+End-user installer is available at: http://desowin.org/usbpcap
 Following informations are intended for developers and power users only.
 
 Directory overview:
@@ -17,14 +17,14 @@ Build instructions:
     * To build for Windows XP: replace 'WIN7' with 'WXP'
 
   Windows 8 Build instructions:
-  In order to compile for Windows 8, you need to have Visual Studio 2012
-  Professional or above and install Windows Driver Kit 8.
-  To create solution file use the following command from Visual Studio 2012
+  In order to compile for Windows 8, you need to have Visual Studio 2013
+  Community and install Windows Driver Kit 8.1 Update.
+  To create solution file use the following command from Visual Studio 2013
   Command Prompt (while being chdired into usbpcap sources directory):
   > Nmake2MsBuild dirs
 
   This will create solution dirs.sln. You can build the driver from the
-  Visual Studio 2012 Command Prompt:
+  Visual Studio 2013 Command Prompt:
   > MSBuild dirs.sln /p:Configuration="Win8 Debug"
 
 Installation:
