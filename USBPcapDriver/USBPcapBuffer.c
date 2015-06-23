@@ -493,12 +493,16 @@ USBPcapInitializePcapHeader(PUSBPCAP_ROOTHUB_DATA pData,
 {
     LARGE_INTEGER  time;
 
+#if (NTDDI_VERSION <= NTDDI_WIN7)
     /*
      * Updated approximately every ten milliseconds.
      *
      * TODO: Get higer precision timestamp.
      */
     KeQuerySystemTime(&time);
+#else
+    KeQuerySystemTimePrecise(&time);
+#endif
 
     pcapHeader->ts_sec = (UINT32)(time.QuadPart/10000000-11644473600);
     pcapHeader->ts_usec = (UINT32)((time.QuadPart%10000000)/10);
