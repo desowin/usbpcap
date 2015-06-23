@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<?define ProductName = "USBPcap" ?>
+<?define ProductVersion = "1.1.0"?>
+<?define ProductId = "72D32C72-A964-4DB2-9335-D758764AF8B1"?>
+<?define ProductUpgradeCode = "EBF1A3FB-1BB4-47C6-B468-4917062B5294"?>
+<?if $(var.Platform) = x64 ?>
+<?define ProductDisplayName = "$(var.ProductName) 64-bit" ?>
+<?define Win64 = "yes" ?>
+<?define PlatformProgramFilesFolder = "ProgramFiles64Folder" ?>
+<?define USBPcapCatSuffix = "amd64" ?>
+<?else ?>
+<?define ProductDisplayName = "$(var.ProductName)" ?>
+<?define Win64 = "no" ?>
+<?define PlatformProgramFilesFolder = "ProgramFilesFolder" ?>
+<?define USBPcapCatSuffix = "x86" ?>
+<?endif ?>
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi">
+    <Product Id="$(var.ProductId)" UpgradeCode="$(var.ProductUpgradeCode)" Name="$(var.ProductDisplayName) (v$(var.ProductVersion))" Version="$(var.ProductVersion)" Manufacturer="USBPcap Developers" Language="1033">
+        <Package InstallerVersion="200" Compressed="yes" Platform="$(var.Platform)" Comments="Windows Installer Package" InstallScope="perMachine" InstallPrivileges="elevated" />
+        <Media Id="1" Cabinet="USBPcap$(var.Platform).cab" EmbedCab="yes" CompressionLevel="high" />
+        <Property Id="ARPHELPLINK" Value="http://desowin.org/usbpcap" />
+        <Property Id="ARPURLINFOABOUT" Value="http://desowin.org/usbpcap" />
+        <Property Id="ARPNOREPAIR" Value="1" />
+        <Property Id="ARPNOMODIFY" Value="1" />
+        <Property Id="USBPCAP_NSIS">
+            <RegistrySearch Id="USBPcap_NSIS_RegKey" Type="raw" Root="HKLM" Key="Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" Name="UninstallString" />
+        </Property>
+        <Condition Message="Previous version of USBPcap is installed. Please uninstall it.">NOT USBPCAP_NSIS</Condition>
+        <?if $(var.Platform) != x64 ?>
+        <Condition Message="This installer can be run only on 32-bit Windows.">%PROCESSOR_ARCHITECTURE ~= "x86" AND %PROCESSOR_ARCHITEW6432 &lt;&gt; "amd64"</Condition>
+        <?endif ?>
+        <Condition Message="Unsupported Windows version. Only XP, Vista, 7 and 8 are supported.">NOT VersionNT &lt; 501</Condition>
+        <Upgrade Id="$(var.ProductUpgradeCode)">
+            <UpgradeVersion Minimum="$(var.ProductVersion)" OnlyDetect="no" Property="NEWERVERSIONDETECTED" />
+            <UpgradeVersion Minimum="1.0.9" Maximum="$(var.ProductVersion)" IncludeMinimum="yes" IncludeMaximum="no" Property="OLDERVERSIONBEINGUPGRADED" />
+        </Upgrade>
+        <Directory Id="TARGETDIR" Name="SourceDir">
+            <Directory Id="$(var.PlatformProgramFilesFolder)">
+                <Directory Id="INSTALLLOCATION" Name="USBPcap">
+                    <Component Id="USBPcapCMD" Guid="FA489489-8302-4226-8FAA-B09521C720A2" Location="local">
+                        <File Id="USBPcapCMD.exe" Name="USBPcapCMD.exe" Source="..\Release\USBPcapCMD_$(var.Platform).exe" Vital="yes" />
+                    </Component>
+                    <Component Id="USBPcapXPDriver" Guid="A20B05A1-E38E-4D6F-8EF1-B8139099DC4C" Location="local" Transitive="yes">
+                        <Condition>VersionNT &gt;= 501 AND VersionNT &lt; 600</Condition>
+                        <File Id="USBPcapXP.sys" Name="USBPcap.sys" Source="..\Release\XP\$(var.Platform)\USBPcap.sys" Vital="yes" />
+                        <File Id="USBPcapXP.inf" Name="USBPcap.inf" Source="..\Release\XP\$(var.Platform)\USBPcap.inf" Vital="yes" />
+                        <File Id="USBPcap$(var.USBPcapCatSuffix)XP.cat" Name="USBPcap$(var.USBPcapCatSuffix).cat" Source="..\Release\XP\$(var.Platform)\USBPcap$(var.USBPcapCatSuffix).cat" Vital="yes" />
+                    </Component>
+                    <Component Id="USBPcapVistaDriver" Guid="D321F71B-D9D9-41A4-802C-F0162FB2DBC7" Location="local" Transitive="yes">
+                        <Condition>VersionNT = 600</Condition>
+                        <File Id="USBPcapVista.sys" Name="USBPcap.sys" Source="..\Release\Vista\$(var.Platform)\USBPcap.sys" Vital="yes" />
+                        <File Id="USBPcapVista.inf" Name="USBPcap.inf" Source="..\Release\Vista\$(var.Platform)\USBPcap.inf" Vital="yes" />
+                        <File Id="USBPcap$(var.USBPcapCatSuffix)Vista.cat" Name="USBPcap$(var.USBPcapCatSuffix).cat" Source="..\Release\Vista\$(var.Platform)\USBPcap$(var.USBPcapCatSuffix).cat" Vital="yes" />
+                    </Component>
+                    <Component Id="USBPcap7Driver" Guid="A6E68224-4F7B-4738-AE82-3ADADD79AB48" Location="local" Transitive="yes">
+                        <Condition>VersionNT = 601</Condition>
+                        <File Id="USBPcap7.sys" Name="USBPcap.sys" Source="..\Release\Windows7\$(var.Platform)\USBPcap.sys" Vital="yes" />
+                        <File Id="USBPcap7.inf" Name="USBPcap.inf" Source="..\Release\Windows7\$(var.Platform)\USBPcap.inf" Vital="yes" />
+                        <File Id="USBPcap$(var.USBPcapCatSuffix)7.cat" Name="USBPcap$(var.USBPcapCatSuffix).cat" Source="..\Release\Windows7\$(var.Platform)\USBPcap$(var.USBPcapCatSuffix).cat" Vital="yes" />
+                    </Component>
+                    <Component Id="USBPcap8Driver" Guid="B9D2F712-5D05-4160-9F04-A79A291B5163" Location="local" Transitive="yes">
+                        <Condition>VersionNT &gt;= 602</Condition>
+                        <File Id="USBPcap8.sys" Name="USBPcap.sys" Source="..\Release\Windows8\$(var.Platform)\USBPcap.sys" Vital="yes" />
+                        <File Id="USBPcap8.inf" Name="USBPcap.inf" Source="..\Release\Windows8\$(var.Platform)\USBPcap.inf" Vital="yes" />
+                        <File Id="USBPcap$(var.USBPcapCatSuffix)8.cat" Name="USBPcap$(var.USBPcapCatSuffix).cat" Source="..\Release\Windows8\$(var.Platform)\USBPcap$(var.USBPcapCatSuffix).cat" Vital="yes" />
+                    </Component>
+                    <Component Id="DetectUSB3" Guid="4e419e71-e254-440a-a1a7-8bf6c89e0f65" Location="local" KeyPath="yes">
+                        <RegistryKey Root="HKLM" Key="SYSTEM\CurrentControlSet\services\USBPcap" ForceCreateOnInstall="yes" ForceDeleteOnUninstall="yes" />
+                    </Component>
+                </Directory>
+            </Directory>
+        </Directory>
+        <InstallExecuteSequence>
+            <RemoveExistingProducts After="InstallValidate" />
+        </InstallExecuteSequence>
+        <Feature Id="USBPcapDriver" Level="1" Absent="disallow" Title="USBPcap Driver" ConfigurableDirectory="INSTALLLOCATION" AllowAdvertise="no" InstallDefault="local">
+            <ComponentRef Id="USBPcapXPDriver" />
+            <ComponentRef Id="USBPcapVistaDriver" />
+            <ComponentRef Id="USBPcap7Driver" />
+            <ComponentRef Id="USBPcap8Driver" />
+        </Feature>
+        <Feature Id="USBPcapCMD" Level="1" Absent="disallow" Title="USBPcapCMD" ConfigurableDirectory="INSTALLLOCATION" AllowAdvertise="no" InstallDefault="local">
+            <ComponentRef Id="USBPcapCMD" />
+        </Feature>
+        <Feature Id="DetectUSB3Feature" Level="1" Title="Detect USB3" AllowAdvertise="no" InstallDefault="local">
+            <ComponentRef Id="DetectUSB3" />
+        </Feature>
+        <CustomAction Id="DetectUSB3" Directory="INSTALLLOCATION" Execute="deferred" ExeCommand="&quot;[INSTALLLOCATION]USBPcapCMD.exe&quot; &quot;-I&quot;" Impersonate="no" />
+        <CustomAction Id="InstallDriver" Directory="INSTALLLOCATION" Execute="deferred" ExeCommand="[SystemFolder]RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf" Impersonate="no" />
+        <CustomAction Id="UninstallDriver" Directory="INSTALLLOCATION" Execute="deferred" ExeCommand="[SystemFolder]RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultUninstall 128 .\USBPcap.inf" Impersonate="no" />
+        <InstallExecuteSequence>
+            <Custom Action="DetectUSB3" After="WriteRegistryValues">NOT Installed AND <![CDATA[&DetectUSB3Feature=3]]></Custom>
+            <Custom Action="InstallDriver" After="WriteRegistryValues">NOT Installed</Custom>
+            <Custom Action="UninstallDriver" After="InstallInitialize">REMOVE="ALL"</Custom>
+            <ScheduleReboot After="InstallFinalize" />
+        </InstallExecuteSequence>
+        <WixVariable Id="WixUILicenseRtf" Value="gpl-2.0.rtf" />
+        <UIRef Id="WixUI_FeatureTree" />
+        <UI>
+        </UI>
+    </Product>
+</Wix>
