@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+  <!-- Basic directory structure -->
+  <Fragment>
+    <!-- "Special" directory, required for the root drive -->
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <!-- "Special" directory, required for the Program Files folder -->
+      <Directory Id="$(var.PlatformProgramFilesFolder)">
+        <!-- These directories follow the typical hierarchical structure -->
+        <Directory Id="INSTALLFOLDER" Name="$(var.ProductName)"/>
+      </Directory>
+      <Directory Id="SystemFolder"/>
+    </Directory>
+  </Fragment>
+</Include>

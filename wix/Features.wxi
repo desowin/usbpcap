@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+  <!-- User-selectable features -->
+  <Fragment>
+    <Feature Id="Fe.USBPcapDriver" Title="USBPcap Driver" Level="1" Absent="disallow" AllowAdvertise="no" Display="expand">
+      <ComponentGroupRef Id="CG.USBPcap8_Driver" />
+      <ComponentGroupRef Id="CG.USBPcap7_Driver" />
+      <ComponentGroupRef Id="CG.USBPcapVista_Driver" />
+      <ComponentGroupRef Id="CG.USBPcapXP_Driver" />
+    </Feature>
+    <Feature Id="Fe.USBPcapCMD" Level="1" Absent="disallow" Title="USBPcapCMD" AllowAdvertise="no" Display="expand" >
+      <ComponentGroupRef Id="CG.USBPcapCMD" />
+    </Feature>
+    <Feature Id="Fe.DetectUSB3" Level="1" Title="Detect USB3" AllowAdvertise="no">
+      <ComponentGroupRef Id="CG.DetectUSB3" />
+    </Feature>
+    <CustomAction Id="DetectUSB3" Directory="INSTALLFOLDER" Execute="deferred" ExeCommand="&quot;[INSTALLFOLDER]USBPcapCMD$(var.USBPcapCMDSuffix).exe&quot; &quot;-I&quot;" Impersonate="no" />
+    <CustomAction Id="InstallDriver" Directory="INSTALLFOLDER" Execute="deferred" ExeCommand="[SystemFolder]RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf" Impersonate="no" />
+    <CustomAction Id="UninstallDriver" Directory="INSTALLFOLDER" Execute="deferred" ExeCommand="[SystemFolder]RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultUninstall 128 .\USBPcap.inf" Impersonate="no" />
+    <InstallExecuteSequence>
+      <Custom Action="DetectUSB3" After="WriteRegistryValues">NOT Installed AND <![CDATA[&Fe.DetectUSB3=3]]></Custom>
+      <Custom Action="InstallDriver" After="WriteRegistryValues">NOT Installed</Custom>
+      <Custom Action="UninstallDriver" After="InstallInitialize">REMOVE="ALL"</Custom>
+      <ScheduleReboot After="InstallFinalize" />
+    </InstallExecuteSequence>
+  </Fragment>
+</Include>

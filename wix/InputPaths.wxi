@@ -1,0 +1,16 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Include>
+  <?define Release.Dir ="..\Release" ?>
+  <?if $(var.Platform) = x64 ?>
+  <?define Windows8.Dir ="$(var.Release.Dir)\Windows8\x64" ?>
+  <?define Windows7.Dir ="$(var.Release.Dir)\Windows7\x64" ?>
+  <?define WindowsVista.Dir ="$(var.Release.Dir)\Vista\x64" ?>
+  <?define WindowsXP.Dir ="$(var.Release.Dir)\XP\x64" ?>
+  <?else ?>
+  <?define Windows8.Dir ="$(var.Release.Dir)\Windows8\x86" ?>
+  <?define Windows7.Dir ="$(var.Release.Dir)\Windows7\x86" ?>
+  <?define WindowsVista.Dir ="$(var.Release.Dir)\Vista\x86" ?>
+  <?define WindowsXP.Dir ="$(var.Release.Dir)\XP\x86" ?>
+  <?endif ?>
+
+</Include>
