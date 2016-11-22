@@ -1,0 +1,185 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="USBPcap open source USB sniffer for Windows." />
+<meta name="keywords" content="USBPcap, opensource, windows, usb, sniffer" />
+<title>USBPcap - TODO</title>
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+
+<!-- Add jQuery library -->
+<script type="text/javascript" src="js/jquery-1.9.0.min.js"></script>
+<!-- Add mousewheel plugin (this is optional) -->
+<script type="text/javascript" src="js/jquery.mousewheel-3.0.6.pack.js"></script>
+<!-- Add fancyBox main JS and CSS files -->
+<script type="text/javascript" src="js/jquery.fancybox.js?v=2.1.4"></script>
+<link rel="stylesheet" type="text/css" href="js/jquery.fancybox.css?v=2.1.4" media="screen" />
+<script type="text/javascript">
+$(document).ready(function() {
+$(".fancybox").fancybox({
+        openEffect	: 'none',
+        closeEffect	: 'none'
+});
+})
+</script>
+<style type="text/css">
+        .fancybox-custom .fancybox-skin {
+                box-shadow: 0 0 50px #222;
+        }
+</style>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6085094-1");
+pageTracker._trackPageview();
+</script>
+
+
+<body>
+
+<div id="container">
+
+<div id="header"><h1>Open Source USB Packet capture for Windows</h1></div>
+
+<div id="sub_header">... works on XP, Vista, 7 and 8</div>
+
+<div id="main_content_top"></div>
+
+<div id="main_content">
+
+<div class="content">
+
+
+<h2>USBPcap TODO</h2>
+<p>
+USBPcap can still be improved. On this page there are information about possible improvements. If you want to have something listed here please send an email to desowin [at] gmail [dot] com.
+</p>
+
+<strike>
+<h3>USB 3.0 support</h3>
+<p>
+Currently USBPcap doesn't work with USB 3.0 root hubs. When attaching
+to root hubs, USBPcap checks if device has USB\ROOT_HUB or
+USB\ROOT_HUB20 hardware ID. Many of the USB 3.0 hubs use custom
+hardware IDs.
+</p>
+
+<p>
+As there doesn't seem to be reliable way to determine if device of USB
+class GUID {36FC9E60-C465-11CF-8056-444553540000} is Root Hub, USBPcap
+needs some workaround.
+</p>
+
+<p>
+I have tried attaching as filter to host controllers - the problem is
+that GUID_DEVINTERFACE_USB_HOST_CONTROLLER is not registered at the
+time AddDevice gets called.
+</p>
+
+<p>
+I think we could work around that issue by making an small application
+to scan the system  Root Hubs and store the non-standard Hardware IDs
+into USBPcap registry entry. The application would just enumerate all
+host controllers and check the Hardware IDs for all Root Hubs. After
+restart, USBPcap would pick the entry from registry and will attach as
+a filter to Root Hub with non-standard Hardware ID.
+</p>
+
+<p>
+Mailing list thread: <a href="https://groups.google.com/d/msg/usbpcap/J3xw10oQpVI/SQMFu9VD_eIJ">USB 3.0 sniffing</a>.
+</p>
+</strike>
+
+<h3>Better integration with Wireshark</h3>
+<p>
+Currently USBPcapCMD needs to be used in order to get the capture files. The ideal solution would be to be able to "click" the USBPcap capture from Wireshark capture interfaces window.
+</p>
+<p>
+Possible solution: Implement USBPcap's extcap (see: <a href="http://sharkfest.wireshark.org/sharkfest.13/presentations/NAP-11_Expanding-Wireshark-Beyond-Ethernet-and-Network-Interfaces_Kershaw-Ryan.pdf">Expanding Wireshark Beyond Network Interfaces</a>).
+</p>
+
+<h3>Notify user about packet drops</h3>
+<p>
+When there is packet drop caused by full capture buffer user won't get any information about how many packets (even if any) were dropped.
+</p>
+<p>
+Possible solution: Switch to <a href="http://www.winpcap.org/ntar/draft/PCAP-DumpFileFormat.html">pcap-ng</a> file format which allows specifying amount of dropped packets.
+</p>
+
+</div>
+
+
+<div class="menu">
+
+<div class="menu_title">USBPcap</div>
+<ul>
+<li><a href="index.html" class="menu_link">Main page</a></li>
+<li><a href="tour.html" class="menu_link">Illustrated Tour</a></li>
+<li><a href="captureformat.html" class="menu_link">Capture format</a></li>
+<li><a href="capture_limitations.html" class="menu_link">Capture limitations</a></li>
+<li><a href="donors.html" class="menu_link">Donors</a></li>
+</ul>
+
+<div class="menu_title">Develop</div>
+<ul>
+<li><a href="develop.html" class="menu_link">Develop</a></li>
+<li><a href="block_diagram.html" class="menu_link">Block diagram</a></li>
+<li><a href="capture_buffer.html" class="menu_link">Capture buffer</a></li>
+<li><a href="dissectors.html" class="menu_link">Wireshark dissectors</a></li>
+<li><a href="todo.html" class="menu_link">USBPcap TODO</a></li>
+</ul>
+
+<div class="menu_title">Links</div>
+<ul>
+<li><a href="https://github.com/desowin/usbpcap" class="menu_link">GitHub project page</a></li>
+<li><a href="https://github.com/desowin/usbpcap/issues?state=open" class="menu_link">Report issue</a></li>
+<li><a href="https://github.com/desowin/usbpcap/commits/master/" class="menu_link">Changelog</a></li>
+<li><a href="https://github.com/desowin/usbpcap/wiki/" class="menu_link">Wiki</a></li>
+</ul>
+
+
+<a href="https://twitter.com/USBPcap" class="twitter-follow-button" data-show-count="false">Follow @USBPcap</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+<script type="text/javascript" src="http://www.ohloh.net/p/634708/widgets/project_thin_badge.js"></script>
+
+<table style="background-color: #fff; padding: 1px;" cellspacing=0>
+  <tr><td>
+  <img src="http://groups.google.com/intl/en/images/logos/groups_logo_sm.gif"
+         height=30 width=140 alt="Google Groups">
+  </td></tr>
+  <tr><td style="padding-left: 1px">
+  <b>Subscribe to USBPcap</b>
+  </td></tr>
+  <form action="http://groups.google.com/group/usbpcap/boxsubscribe">
+  <tr><td style="padding-left: 1px;">
+  Email: <input size="10" type=text name=email>
+  <input type=submit name="sub" value="Subscribe">
+  </td></tr>
+</form>
+<tr><td align=right>
+  <a href="http://groups.google.com/group/usbpcap">Visit this group</a>
+</td></tr>
+</table>
+</div>
+
+
+<div id="clear"></div>
+
+</div>
+
+<div id="main_content_bottom">
+</div>
+
+<div id="footer"><a href="#">Back to top</a> | <a href="http://desowin.org">my homepage</a></div>
+
+</div>
+
+</body>
+
+</html>

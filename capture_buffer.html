@@ -1,0 +1,185 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="USBPcap open source USB sniffer for Windows." />
+<meta name="keywords" content="USBPcap, opensource, windows, usb, sniffer" />
+<title>USBPcap - capture buffer</title>
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+
+<!-- Add jQuery library -->
+<script type="text/javascript" src="js/jquery-1.9.0.min.js"></script>
+<!-- Add mousewheel plugin (this is optional) -->
+<script type="text/javascript" src="js/jquery.mousewheel-3.0.6.pack.js"></script>
+<!-- Add fancyBox main JS and CSS files -->
+<script type="text/javascript" src="js/jquery.fancybox.js?v=2.1.4"></script>
+<link rel="stylesheet" type="text/css" href="js/jquery.fancybox.css?v=2.1.4" media="screen" />
+<script type="text/javascript">
+$(document).ready(function() {
+$(".fancybox").fancybox({
+        openEffect	: 'none',
+        closeEffect	: 'none'
+});
+})
+</script>
+<style type="text/css">
+        .fancybox-custom .fancybox-skin {
+                box-shadow: 0 0 50px #222;
+        }
+</style>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6085094-1");
+pageTracker._trackPageview();
+</script>
+
+
+<body>
+
+<div id="container">
+
+<div id="header"><h1>Open Source USB Packet capture for Windows</h1></div>
+
+<div id="sub_header">... works on XP, Vista, 7 and 8</div>
+
+<div id="main_content_top"></div>
+
+<div id="main_content">
+
+<div class="content">
+
+
+<h2>USBPcap capture buffer</h2>
+<p>
+There is one capture buffer per Root Hub. Capture buffer uses the concept of circular buffer with overwrite protection.
+By default USBPcapCMD sets the buffer size to 1 MiB. Minimum buffer size is 4096 (4 KiB), maximum 134217728 (128 MiB).
+</p>
+<p>
+Variables used in capture buffer implementation:
+<ul>
+    <li>KSPIN_LOCK  <i>bufferLock</i>;<br/>Used to synchronize the access to buffer.</li>
+    <li>PVOID       <i>buffer</i>;<br/>The actual buffer.</li>
+    <li>UINT32      <i>bufferSize</i>;<br/>Size of buffer in bytes.</li>
+    <li>UINT32      <i>readOffset</i>;<br/>Index of first unread byte.</li>
+    <li>UINT32      <i>writeOffset</i>;<br/>Index of first empty byte that data can be written to.</li>
+</ul>
+
+Buffer is empty if and only if readOffset is equal to writeOffset. This condition is warranted by overwrite protection. The maximum number of bytes that can be stored inside buffer is bufferSize-1.
+</p>
+<p>
+USBPcap (device) writes data into buffer. USBPcapCMD reads data from the buffer.
+</p>
+
+<h3>USBPcap capture buffer working principle explained</h3>
+<p>
+Following symbols were used instead of full variable names:
+<ul>
+    <li><b>R</b> - <i>readOffset</i></li>
+    <li><b>W</b> - <i>writeOffset</i></li>
+    <li><b>N</b> - <i>bufferSize</i></li>
+</ul>
+
+Both <b>R</b> and <b>W</b> can take values from range [0, N-1]. Buffer is empty if and only if <b>R=W</b> (<b>N-1</b> bytes of data can be written then).
+If <b>R&lt;W</b> there are <b>N-R+W</b> unread bytes of data and it is possible to write <b>R-W-1</b> bytes of additional data.
+If <b>R&gt;W</b> there are <b>W-R</b> unread bytes of data and it is possible to write <b>N-W-R-1</b> bytes of additional data.
+</p>
+
+<p>
+<center>
+<a class="fancybox" rel="capture" href="images/capture_buffer.png" title="Figure 1: USBPcap capture buffer working principle.">
+<img src="images/capture_buffer_small.png" alt=""/>
+</a><br/>
+Figure 1: USBPcap capture buffer working principle.
+</center>
+</p>
+
+<p>
+Sample 6-step buffer cycle is presented on figure 1. The steps are described below.
+<ol>
+    <li>Buffer initialization. Buffer of size <b>N</b> is being allocated and variables <b>R</b> and <b>W</b> are being zeroed.</li>
+    <li><b>2</b> bytes were written into the buffer <b>(R=0; W=2)</b>.</li>
+    <li><b>2</b> bytes were read from the buffer. The buffer is now empty <b>(R=W=2)</b>.</li>
+    <li><b>(N-2)-2</b> bytes of data were written <b>(R=2; W=N-2)</b>. Only 3 more bytes can be written into the buffer. Trying to write anything larger than 3 bytes will fail.</li>
+    <li><b>3</b> bytes were written into the buffer. The buffer is now full and no additional data can be written <b>(R=2; W=1)</b>.</li>
+    <li><b>(N-2)-1</b> bytes of data were read from the buffer <b>(R=N-1; W=1)</b>. Once again the data can be written into the buffer (maximum <b>N-3</b> bytes).</li>
+</ol>
+
+
+</div>
+
+
+<div class="menu">
+
+<div class="menu_title">USBPcap</div>
+<ul>
+<li><a href="index.html" class="menu_link">Main page</a></li>
+<li><a href="tour.html" class="menu_link">Illustrated Tour</a></li>
+<li><a href="captureformat.html" class="menu_link">Capture format</a></li>
+<li><a href="capture_limitations.html" class="menu_link">Capture limitations</a></li>
+<li><a href="donors.html" class="menu_link">Donors</a></li>
+</ul>
+
+<div class="menu_title">Develop</div>
+<ul>
+<li><a href="develop.html" class="menu_link">Develop</a></li>
+<li><a href="block_diagram.html" class="menu_link">Block diagram</a></li>
+<li><a href="capture_buffer.html" class="menu_link">Capture buffer</a></li>
+<li><a href="dissectors.html" class="menu_link">Wireshark dissectors</a></li>
+<li><a href="todo.html" class="menu_link">USBPcap TODO</a></li>
+</ul>
+
+<div class="menu_title">Links</div>
+<ul>
+<li><a href="https://github.com/desowin/usbpcap" class="menu_link">GitHub project page</a></li>
+<li><a href="https://github.com/desowin/usbpcap/issues?state=open" class="menu_link">Report issue</a></li>
+<li><a href="https://github.com/desowin/usbpcap/commits/master/" class="menu_link">Changelog</a></li>
+<li><a href="https://github.com/desowin/usbpcap/wiki/" class="menu_link">Wiki</a></li>
+</ul>
+
+
+<a href="https://twitter.com/USBPcap" class="twitter-follow-button" data-show-count="false">Follow @USBPcap</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+<script type="text/javascript" src="http://www.ohloh.net/p/634708/widgets/project_thin_badge.js"></script>
+
+<table style="background-color: #fff; padding: 1px;" cellspacing=0>
+  <tr><td>
+  <img src="http://groups.google.com/intl/en/images/logos/groups_logo_sm.gif"
+         height=30 width=140 alt="Google Groups">
+  </td></tr>
+  <tr><td style="padding-left: 1px">
+  <b>Subscribe to USBPcap</b>
+  </td></tr>
+  <form action="http://groups.google.com/group/usbpcap/boxsubscribe">
+  <tr><td style="padding-left: 1px;">
+  Email: <input size="10" type=text name=email>
+  <input type=submit name="sub" value="Subscribe">
+  </td></tr>
+</form>
+<tr><td align=right>
+  <a href="http://groups.google.com/group/usbpcap">Visit this group</a>
+</td></tr>
+</table>
+</div>
+
+
+<div id="clear"></div>
+
+</div>
+
+<div id="main_content_bottom">
+</div>
+
+<div id="footer"><a href="#">Back to top</a> | <a href="http://desowin.org">my homepage</a></div>
+
+</div>
+
+</body>
+
+</html>

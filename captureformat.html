@@ -1,0 +1,248 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="USBPcap open source USB sniffer for Windows." />
+<meta name="keywords" content="USBPcap, opensource, windows, usb, sniffer" />
+<title>USBPcap capture format description</title>
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+
+<!-- Add jQuery library -->
+<script type="text/javascript" src="js/jquery-1.9.0.min.js"></script>
+<!-- Add mousewheel plugin (this is optional) -->
+<script type="text/javascript" src="js/jquery.mousewheel-3.0.6.pack.js"></script>
+<!-- Add fancyBox main JS and CSS files -->
+<script type="text/javascript" src="js/jquery.fancybox.js?v=2.1.4"></script>
+<link rel="stylesheet" type="text/css" href="js/jquery.fancybox.css?v=2.1.4" media="screen" />
+<script type="text/javascript">
+$(document).ready(function() {
+$(".fancybox").fancybox({
+        openEffect	: 'none',
+        closeEffect	: 'none'
+});
+})
+</script>
+<style type="text/css">
+        .fancybox-custom .fancybox-skin {
+                box-shadow: 0 0 50px #222;
+        }
+</style>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6085094-1");
+pageTracker._trackPageview();
+</script>
+
+
+<body>
+
+<div id="container">
+
+<div id="header"><h1>Open Source USB Packet capture for Windows</h1></div>
+
+<div id="sub_header">... works on XP, Vista, 7 and 8</div>
+
+<div id="main_content_top"></div>
+
+<div id="main_content">
+
+<div class="content">
+
+
+<h2>USBPcap Capture format specification.</h2>
+
+<p>Following document describes the LINKTYPE_USBPCAP used in USBPcap. This merely describes the packet data mentioned in <a href="http://wiki.wireshark.org/Development/LibpcapFileFormat">pcap file format</a>.</p>
+
+<h3>General notes</h3>
+<p>
+The types presented below are described in Windows DDK 7.1.0. Short description:
+<ul>
+    <li>UCHAR - 8 bit unsigned value
+    <li>USHORT - 16 bit unsigned value
+    <li>UINT32 - 32 bit unsigned value
+    <li>UINT64 - 64 bit unsigned value
+    <li>ULONG - 64 bit unsigned value
+    <li><a href="http://msdn.microsoft.com/en-us/library/windows/hardware/ff539136(v=vs.85).aspx">USBD_STATUS</a> - 32 bit unsigned value
+</ul>
+All multi-byte values are LITTLE-ENDIAN.
+</p>
+
+<h2>Base packet header</h2>
+<p>
+The USBPCAP_BUFFER_PACKET_HEADER as defined in USBPcapBuffer.h:
+<pre>#pragma pack(1)
+typedef struct
+{
+    USHORT       headerLen; /* This header length */
+    UINT64       irpId;     /* I/O Request packet ID */
+    USBD_STATUS  status;    /* USB status code
+                               (on return from host controller) */
+    USHORT       function;  /* URB Function */
+    UCHAR        info;      /* I/O Request info */
+
+    USHORT       bus;       /* bus (RootHub) number */
+    USHORT       device;    /* device address */
+    UCHAR        endpoint;  /* endpoint number and transfer direction */
+    UCHAR        transfer;  /* transfer type */
+
+    UINT32       dataLength;/* Data length */
+} USBPCAP_BUFFER_PACKET_HEADER, *PUSBPCAP_BUFFER_PACKET_HEADER;
+</pre>
+<ul>
+    <li>headerLen (offset 0) describes the total length, in bytes, of the header (including all transfer-specific header data).
+    <li>irpId (offset 2) is merely a pointer to IRP casted to the UINT64. This value can be used to match the request with respons.
+    <li>status (offset 10) is valid only on return from host-controller. This field corrensponds to the Status member of <a href="http://msdn.microsoft.com/en-us/library/windows/hardware/ff540409(v=vs.85).aspx">_URB_HEADER</a>
+    <li>function (offset 14) corrensponds to the Function member of <a href="http://msdn.microsoft.com/en-us/library/windows/hardware/ff540409(v=vs.85).aspx">_URB_HEADER</a><br/>
+    <li>info (offset 16) is descibed on the bit-field basis. Currently only the least significant bit (USBPCAP_INFO_PDO_TO_FDO) is defined: it is 0 when IRP goes from FDO to PDO, 1 the other way round. The remaining bits are reserved and must be set to 0.
+    <li>bus (offset 17) is the root hub identifier used to distingush between multiple root hubs.
+    <li>device (offset 19) is USB device number. This field is, contary to the USB specification, 16-bit because the Windows uses 16-bits value for that matter. Check DeviceAddress field of <a href="http://msdn.microsoft.com/en-us/library/windows/hardware/ff540090(v=vs.85).aspx">USB_NODE_CONNECTION_INFORMATION</a>
+    <li>endpoint (offset 21) is the endpoint number used on the USB bus (the MSB describes transfer direction)
+    <li>transfer (offset 22) determines the transfer type and thus the header type. See below for details.
+    <li>dataLength (offset 23) specifies the total length of transfer data to follow directly after the header (at offset headerLen).
+</ul>
+</p>
+
+<h2>Transfer-specific headers</h2>
+<p>
+All transfer-specific headers inherit the USBPCAP_BUFFER_PACKET_HEADER, so first there is the USBPCAP_BUFFER_PACKET_HEADER, then (if any) additional transfer-specific header data and then the transfer data.
+</p>
+<h3>USBPCAP_TRANSFER_ISOCHRONOUS</h3>
+<p>
+When function is equal to USBPCAP_TRANSFER_ISOCHRONOUS (0) the header type is USBPCAP_BUFFER_ISOCH_HEADER<br/>
+<pre>/* Note about isochronous packets:
+ *   packet[x].length, packet[x].status and errorCount are only relevant
+ *   when USBPCAP_INFO_PDO_TO_FDO is set
+ *
+ *   packet[x].length is not used for isochronous OUT transfers.
+ *
+ * Buffer data is attached to:
+ *   * for isochronous OUT transactions (write to device)
+ *       Requests (USBPCAP_INFO_PDO_TO_FDO is not set)
+ *   * for isochronous IN transactions (read from device)
+ *       Responses (USBPCAP_INFO_PDO_TO_FDO is set)
+ */
+#pragma pack(1)
+typedef struct
+{
+    ULONG        offset;
+    ULONG        length;
+    USBD_STATUS  status;
+} USBPCAP_BUFFER_ISO_PACKET, *PUSBPCAP_BUFFER_ISO_PACKET;
+
+#pragma pack(1)
+typedef struct
+{
+    USBPCAP_BUFFER_PACKET_HEADER  header;
+    ULONG                         startFrame;
+    ULONG                         numberOfPackets;
+    ULONG                         errorCount;
+    USBPCAP_BUFFER_ISO_PACKET     packet[1];
+} USBPCAP_BUFFER_ISOCH_HEADER, *PUSBPCAP_BUFFER_ISOCH_HEADER;
+</pre>
+</p>
+
+<h3>USBPCAP_TRANSFER_INTERRUPT</h3>
+<p>
+When function is equal to USBPCAP_TRANSFER_INTERRUPT (1) the header type is USBPCAP_BUFFER_PACKET_HEADER<br/>
+</p>
+
+<h3>USBPCAP_TRANSFER_CONTROL</h3>
+<p>
+When function is equal to USBPCAP_TRANSFER_CONTROL (2) the header type is USBPCAP_BUFFER_CONTROL_HEADER<br/>
+<pre>#define USBPCAP_CONTROL_STAGE_SETUP   0
+#define USBPCAP_CONTROL_STAGE_DATA    1
+#define USBPCAP_CONTROL_STAGE_STATUS  2
+
+#pragma pack(1)
+typedef struct
+{
+    USBPCAP_BUFFER_PACKET_HEADER  header;
+    UCHAR                         stage;
+} USBPCAP_BUFFER_CONTROL_HEADER, *PUSBPCAP_BUFFER_CONTROL_HEADER;
+</pre>
+Where stage determines the control transfer stage.
+</p>
+
+<h3>USBPCAP_TRANSFER_BULK</h3>
+<p>
+When function is equal to USBPCAP_TRANSFER_BULK (3) the header type is USBPCAP_BUFFER_PACKET_HEADER
+</p>
+
+</div>
+
+
+<div class="menu">
+
+<div class="menu_title">USBPcap</div>
+<ul>
+<li><a href="index.html" class="menu_link">Main page</a></li>
+<li><a href="tour.html" class="menu_link">Illustrated Tour</a></li>
+<li><a href="captureformat.html" class="menu_link">Capture format</a></li>
+<li><a href="capture_limitations.html" class="menu_link">Capture limitations</a></li>
+<li><a href="donors.html" class="menu_link">Donors</a></li>
+</ul>
+
+<div class="menu_title">Develop</div>
+<ul>
+<li><a href="develop.html" class="menu_link">Develop</a></li>
+<li><a href="block_diagram.html" class="menu_link">Block diagram</a></li>
+<li><a href="capture_buffer.html" class="menu_link">Capture buffer</a></li>
+<li><a href="dissectors.html" class="menu_link">Wireshark dissectors</a></li>
+<li><a href="todo.html" class="menu_link">USBPcap TODO</a></li>
+</ul>
+
+<div class="menu_title">Links</div>
+<ul>
+<li><a href="https://github.com/desowin/usbpcap" class="menu_link">GitHub project page</a></li>
+<li><a href="https://github.com/desowin/usbpcap/issues?state=open" class="menu_link">Report issue</a></li>
+<li><a href="https://github.com/desowin/usbpcap/commits/master/" class="menu_link">Changelog</a></li>
+<li><a href="https://github.com/desowin/usbpcap/wiki/" class="menu_link">Wiki</a></li>
+</ul>
+
+
+<a href="https://twitter.com/USBPcap" class="twitter-follow-button" data-show-count="false">Follow @USBPcap</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+<script type="text/javascript" src="http://www.ohloh.net/p/634708/widgets/project_thin_badge.js"></script>
+
+<table style="background-color: #fff; padding: 1px;" cellspacing=0>
+  <tr><td>
+  <img src="http://groups.google.com/intl/en/images/logos/groups_logo_sm.gif"
+         height=30 width=140 alt="Google Groups">
+  </td></tr>
+  <tr><td style="padding-left: 1px">
+  <b>Subscribe to USBPcap</b>
+  </td></tr>
+  <form action="http://groups.google.com/group/usbpcap/boxsubscribe">
+  <tr><td style="padding-left: 1px;">
+  Email: <input size="10" type=text name=email>
+  <input type=submit name="sub" value="Subscribe">
+  </td></tr>
+</form>
+<tr><td align=right>
+  <a href="http://groups.google.com/group/usbpcap">Visit this group</a>
+</td></tr>
+</table>
+</div>
+
+
+<div id="clear"></div>
+
+</div>
+
+<div id="main_content_bottom">
+</div>
+
+<div id="footer"><a href="#">Back to top</a> | <a href="http://desowin.org">my homepage</a></div>
+
+</div>
+
+</body>
+
+</html>

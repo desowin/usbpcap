@@ -1,0 +1,180 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="USBPcap open source USB sniffer for Windows." />
+<meta name="keywords" content="USBPcap, opensource, windows, usb, sniffer" />
+<title>USBPcap - develop</title>
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+
+<!-- Add jQuery library -->
+<script type="text/javascript" src="js/jquery-1.9.0.min.js"></script>
+<!-- Add mousewheel plugin (this is optional) -->
+<script type="text/javascript" src="js/jquery.mousewheel-3.0.6.pack.js"></script>
+<!-- Add fancyBox main JS and CSS files -->
+<script type="text/javascript" src="js/jquery.fancybox.js?v=2.1.4"></script>
+<link rel="stylesheet" type="text/css" href="js/jquery.fancybox.css?v=2.1.4" media="screen" />
+<script type="text/javascript">
+$(document).ready(function() {
+$(".fancybox").fancybox({
+        openEffect	: 'none',
+        closeEffect	: 'none'
+});
+})
+</script>
+<style type="text/css">
+        .fancybox-custom .fancybox-skin {
+                box-shadow: 0 0 50px #222;
+        }
+</style>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6085094-1");
+pageTracker._trackPageview();
+</script>
+
+
+<body>
+
+<div id="container">
+
+<div id="header"><h1>Open Source USB Packet capture for Windows</h1></div>
+
+<div id="sub_header">... works on XP, Vista, 7 and 8</div>
+
+<div id="main_content_top"></div>
+
+<div id="main_content">
+
+<div class="content">
+
+
+<h2>Get USBPcap source code</h2>
+<p>
+USBPcap uses <a href="http://stackoverflow.com/questions/315911/git-for-beginners-the-definitive-practical-guide">Git Version Control System</a>.
+<h3>Browse online</h3>
+<p>You can browse through the source code repository as well as view previous revisions and changes at <a href="https://github.com/desowin/usbpcap">https://github.com/desowin/usbpcap</a>.
+</p>
+<h3>Using git (Recommended)</h3>
+<p>
+You can get the latest Wireshark source code using the <a href="http://git-scm.com/">Git</a> version control system.
+</p>
+<p>
+To download complete repository use the <i>git clone</i> command:<br/>
+<pre>git clone https://github.com/desowin/usbpcap.git</pre>
+</p>
+<h3>Contribute Code</h3>
+<p>
+If you have changes you want included in USBPcap fork the code at github and file <a href="https://help.github.com/articles/using-pull-requests">pull request</a>.
+If you do not want to use github and have your own git repository available on the internet you can also email me the pull request at desowin [at] gmail [dot] com.
+</p>
+</p>
+
+<h2>Setting up build environment</h2>
+<p>
+To compile USBPcap for Windows XP, Vista and 7 you need to download and install <a href="http://www.microsoft.com/en-us/download/details.aspx?id=11800">Windows Driver Kit 7.1.0</a>.
+</p>
+<p>
+If you also want to compile for Windows 8, you must have Visual Studio 2012 Professional or above and install <a href="http://msdn.microsoft.com/en-US/windows/hardware/hh852362">Windows Driver Kit 8</a>.
+</p>
+<p>
+In order to build installer you need to download <a href="http://nsis.sourceforge.net">NSIS</a> 2.46 or newer. Note that x86 NSIS will produce installer working on both 32-bit and 64-bit systems.
+</p>
+<p>
+All tools should be installed in their default install locations. If you want to change installation directory you would have to change USBPcap build scripts.
+</p>
+
+<h2>Compiling USBPcap</h2>
+<p>
+To build USBPcap release files simply execute the <b>build_release.bat</b> file. Please note that by default the release files will be TESTSIGNED using USBPcap test key.
+If you have valid certificate that can be used for signing drivers (see <a href="http://msdn.microsoft.com/en-us/library/windows/hardware/gg487328.aspx">Kernel-Mode Code Signing Walkthrough</a>) edit the <b>config.bat</b> file and change the <i>_USBPCAP_SIGN_OPTS</i>.
+<h3>WARNING</h3>
+<p>When installing TESTSIGNED release on 64-bit Windows you will be notified about unsigned driver shortly after installation.
+To make the driver work you must enable the TESTSIGNING to boot into Test Mode.<br/>
+To enable testsigning issue following command (in administrator command line):
+<pre>Bcdedit.exe -set TESTSIGNING ON</pre>
+</p>
+
+<h2>Building USBPcap installer</h2>
+<p>
+After compiling USBPcap release files execute <b>nsis\build_installer.bat</b> to build installer. Uninstaller will be signed with key used for driver signing. Installer will not be signed, if you want to have it signed, you should do so manually.
+</p>
+
+</div>
+
+
+<div class="menu">
+
+<div class="menu_title">USBPcap</div>
+<ul>
+<li><a href="index.html" class="menu_link">Main page</a></li>
+<li><a href="tour.html" class="menu_link">Illustrated Tour</a></li>
+<li><a href="captureformat.html" class="menu_link">Capture format</a></li>
+<li><a href="capture_limitations.html" class="menu_link">Capture limitations</a></li>
+<li><a href="donors.html" class="menu_link">Donors</a></li>
+</ul>
+
+<div class="menu_title">Develop</div>
+<ul>
+<li><a href="develop.html" class="menu_link">Develop</a></li>
+<li><a href="block_diagram.html" class="menu_link">Block diagram</a></li>
+<li><a href="capture_buffer.html" class="menu_link">Capture buffer</a></li>
+<li><a href="dissectors.html" class="menu_link">Wireshark dissectors</a></li>
+<li><a href="todo.html" class="menu_link">USBPcap TODO</a></li>
+</ul>
+
+<div class="menu_title">Links</div>
+<ul>
+<li><a href="https://github.com/desowin/usbpcap" class="menu_link">GitHub project page</a></li>
+<li><a href="https://github.com/desowin/usbpcap/issues?state=open" class="menu_link">Report issue</a></li>
+<li><a href="https://github.com/desowin/usbpcap/commits/master/" class="menu_link">Changelog</a></li>
+<li><a href="https://github.com/desowin/usbpcap/wiki/" class="menu_link">Wiki</a></li>
+</ul>
+
+
+<a href="https://twitter.com/USBPcap" class="twitter-follow-button" data-show-count="false">Follow @USBPcap</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+<script type="text/javascript" src="http://www.ohloh.net/p/634708/widgets/project_thin_badge.js"></script>
+
+<table style="background-color: #fff; padding: 1px;" cellspacing=0>
+  <tr><td>
+  <img src="http://groups.google.com/intl/en/images/logos/groups_logo_sm.gif"
+         height=30 width=140 alt="Google Groups">
+  </td></tr>
+  <tr><td style="padding-left: 1px">
+  <b>Subscribe to USBPcap</b>
+  </td></tr>
+  <form action="http://groups.google.com/group/usbpcap/boxsubscribe">
+  <tr><td style="padding-left: 1px;">
+  Email: <input size="10" type=text name=email>
+  <input type=submit name="sub" value="Subscribe">
+  </td></tr>
+</form>
+<tr><td align=right>
+  <a href="http://groups.google.com/group/usbpcap">Visit this group</a>
+</td></tr>
+</table>
+</div>
+
+
+<div id="clear"></div>
+
+</div>
+
+<div id="main_content_bottom">
+</div>
+
+<div id="footer"><a href="#">Back to top</a> | <a href="http://desowin.org">my homepage</a></div>
+
+</div>
+
+</body>
+
+</html>

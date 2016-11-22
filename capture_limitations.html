@@ -1,0 +1,216 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="USBPcap open source USB sniffer for Windows." />
+<meta name="keywords" content="USBPcap, opensource, windows, usb, sniffer" />
+<title>USBPcap capture limitations</title>
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+
+<!-- Add jQuery library -->
+<script type="text/javascript" src="js/jquery-1.9.0.min.js"></script>
+<!-- Add mousewheel plugin (this is optional) -->
+<script type="text/javascript" src="js/jquery.mousewheel-3.0.6.pack.js"></script>
+<!-- Add fancyBox main JS and CSS files -->
+<script type="text/javascript" src="js/jquery.fancybox.js?v=2.1.4"></script>
+<link rel="stylesheet" type="text/css" href="js/jquery.fancybox.css?v=2.1.4" media="screen" />
+<script type="text/javascript">
+$(document).ready(function() {
+$(".fancybox").fancybox({
+        openEffect	: 'none',
+        closeEffect	: 'none'
+});
+})
+</script>
+<style type="text/css">
+        .fancybox-custom .fancybox-skin {
+                box-shadow: 0 0 50px #222;
+        }
+</style>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6085094-1");
+pageTracker._trackPageview();
+</script>
+
+
+<body>
+
+<div id="container">
+
+<div id="header"><h1>Open Source USB Packet capture for Windows</h1></div>
+
+<div id="sub_header">... works on XP, Vista, 7 and 8</div>
+
+<div id="main_content_top"></div>
+
+<div id="main_content">
+
+<div class="content">
+
+
+<h2>USBPcap Capture limitations</h2>
+<p>
+On this page the limitations of USBPcap are presented and some terms are clarified. Prior knowledge of USB specification is higly recommended.
+</p>
+
+<h3>Formatting conventions</h3>
+<p>
+There are conflicting terminologies between USBPcap/Windows and USB specification. For that reason <b>USB specification terms are written in boldface</b> and <i>USBPcap/Wireshark/Windows terms are written in italics</i>.
+</p>
+<p>
+USBPcap captures data from <i>USB Requests Blocks (URBs)</i> that are being carried inside <i>I/O Request Packets (IRP)</i>. Wireshark presents the <i>packets</i> as <i>frames</i>. You should be aware that USBPcap's <i>packet</i> is not exactly the same as USB specification's <b>packet</b> and Wireshark's <i>frame</i> is definitely something different than USB <b>frame</b>.
+</p>
+
+<h3>What you won't see using USBPcap</h3>
+<p>
+As USBPcap captures <i>URBs</i> passed between <i>functional device object (FDO)</i> and <i>physical device object (PDO)</i> there are some USB communications elements that you will notice only in hardware USB sniffer. These are:
+<ul>
+    <li>Bus states (<b>Suspended, Power ON, Power OFF, Reset, High Speed Detection Handshake</b>)</li>
+    <li>Packet ID (<b>PID</b>)</li>
+    <li><a href="http://www.usbmadesimple.co.uk/ums_7.htm#split_trans">Split transactions</a> (<b>CSPLIT, SSPLIT</b>)</li>
+    <li>Duration of bus state and time used to transfer <b>packet</b> over the wire</li>
+    <li>Transfer speed (<b>Low Speed, Full Speed, High Speed</b>)</li>
+</ul>
+
+Moreover, you won't see complete USB enumeration. You will only see the USB control transfer send to device after the device has been assigned its address.
+</p>
+
+<h2>A closer look at USB transfer types</h2>
+<p>
+Following sections shows what parts of USB communication happening on the wire gets captured by USBPcap.
+</p>
+
+<h3>Control transfers</h3>
+<p>
+There are three stages for control transfers:
+<ul>
+    <li>SETUP stage</li>
+    <li>DATA stage (optional)</li>
+    <li>STATUS stage</li>
+</ul>
+
+<p>
+SETUP stage consists of three <b>packets</b>: <b>SETUP</b>, <b>DATA</b> (USB uses the DATA0/DATA1 toggling mechanism which is omitted here due to concentration on the logical layer of communication) and <b>ACK</b>. <i>USBPcap packet</i> related to SETUP stage contains only data from the <b>DATA packet</b>.
+</p>
+
+<p>
+Optional DATA stage consists of <b>IN transaction</b> or <b>OUT transcation</b> depending on the transmission direction (IN means from device to host, OUT means from host to device). In these transactions there are following <b>packets</b>: <b>IN</b> or <b>OUT</b>, <b>DATA</b> (one or more), <b>ACK</b>. <i>USBPcap packet</i> related to DATA stage contains combined data from every <b>DATA</b> packet from the <b>transaction</b>.
+</p>
+
+<p>
+STATUS stage consists of <b>IN transaction</b> or <b>OUT transaction</b> depending on the transmission direction in DATA stage. In these transactions there is empty <b>DATA</b> packet being sent. <i>USBPcap packet</i> related to STATUS stage does not contain any data.
+</p>
+
+<p>
+In USB system the lack of <b>ACK</b> packet is considered as negative acknowledge <b>NAK</b>. With USBPcap you won't get any idea about the amount of <b>NAK'ed</b> transactions on the wire.
+</p>
+
+<h3>Isochronous transfers</h3>
+<p>
+Isochronous transactions in USB consist of two <b>packets</b>: <b>IN</b> or <b>OUT</b> and <b>DATA</b>. There is no <b>ACK</b> associated with isochronous transfer because these transfers have no data integrity guarantee. Single <i>IRP</i> often carries more than one <i>isochronous packet</i>. Each of the <i>isochronous packets</i> contains data from <b>DATA packet</b>.
+For every <i>IRP</i> there are two <i>USBPcap packets</i>. First one contains data captured when the <i>IRP</i> went from <i>FDO</i> to <i>PDO</i>, second one contains data from the other way round.
+</p>
+<p>
+In case of <b>OUT</b> transfers the first <i>USBPcap packet</i> contains complete data and the second one contains information about completion status of the transactions.
+In case of <b>IN</b> transfers the first <i>USBPcap packet</i> contains only information about allocated buffer to receive the data and the second <i>packet</i> contains received data.
+</p>
+
+<h3>Interrupt transfers</h3>
+<p>
+Interrupt transactions that weren't <b>NAK'ed</b> are made up of three <b>packets</b>: <b>IN</b> or <b>OUT</b>, <b>DATA</b> and <b>ACK</b>.
+<i>USBPcap packet</i> related to interrupt transfer contains data from <b>DATA packet</b>.
+</p>
+
+<h3>Bulk transfers</h3>
+<p>
+Bulk transactions consists of three <b>packets</b>: <b>IN</b> or <b>OUT</b>, <b>DATA</b> and <b>ACK</b>.
+<b>Bulk transfer</b> can be made out of one or more <b>bulk transactions</b>.
+Every <b>bulk transfer</b> results in one <i>USBPcap packet</i> containing combined data from all <b>DATA packets</b> from all <b>transactions</b> belonging to given <b>transfer</b>.
+</p>
+<h4>USB Mass Storage</h4>
+<p>
+USB pendrives uses USB Mass Storage class driver. These devices can support different industry standard command sets although most drives only use the SCSI transparent command set.
+During every data exchange with USB Mass Storage device there are three transports involved: Command Transport, Data Transport and Status Transport.
+Every transport is being done as single <b>bulk transfer</b>.
+Hence every data exchange with USB Mass Storage device results in three <i>USBPcap packets</i> where the first one contains Command, second contains Data and the last one contains Status.
+</p>
+
+</div>
+
+
+<div class="menu">
+
+<div class="menu_title">USBPcap</div>
+<ul>
+<li><a href="index.html" class="menu_link">Main page</a></li>
+<li><a href="tour.html" class="menu_link">Illustrated Tour</a></li>
+<li><a href="captureformat.html" class="menu_link">Capture format</a></li>
+<li><a href="capture_limitations.html" class="menu_link">Capture limitations</a></li>
+<li><a href="donors.html" class="menu_link">Donors</a></li>
+</ul>
+
+<div class="menu_title">Develop</div>
+<ul>
+<li><a href="develop.html" class="menu_link">Develop</a></li>
+<li><a href="block_diagram.html" class="menu_link">Block diagram</a></li>
+<li><a href="capture_buffer.html" class="menu_link">Capture buffer</a></li>
+<li><a href="dissectors.html" class="menu_link">Wireshark dissectors</a></li>
+<li><a href="todo.html" class="menu_link">USBPcap TODO</a></li>
+</ul>
+
+<div class="menu_title">Links</div>
+<ul>
+<li><a href="https://github.com/desowin/usbpcap" class="menu_link">GitHub project page</a></li>
+<li><a href="https://github.com/desowin/usbpcap/issues?state=open" class="menu_link">Report issue</a></li>
+<li><a href="https://github.com/desowin/usbpcap/commits/master/" class="menu_link">Changelog</a></li>
+<li><a href="https://github.com/desowin/usbpcap/wiki/" class="menu_link">Wiki</a></li>
+</ul>
+
+
+<a href="https://twitter.com/USBPcap" class="twitter-follow-button" data-show-count="false">Follow @USBPcap</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+<script type="text/javascript" src="http://www.ohloh.net/p/634708/widgets/project_thin_badge.js"></script>
+
+<table style="background-color: #fff; padding: 1px;" cellspacing=0>
+  <tr><td>
+  <img src="http://groups.google.com/intl/en/images/logos/groups_logo_sm.gif"
+         height=30 width=140 alt="Google Groups">
+  </td></tr>
+  <tr><td style="padding-left: 1px">
+  <b>Subscribe to USBPcap</b>
+  </td></tr>
+  <form action="http://groups.google.com/group/usbpcap/boxsubscribe">
+  <tr><td style="padding-left: 1px;">
+  Email: <input size="10" type=text name=email>
+  <input type=submit name="sub" value="Subscribe">
+  </td></tr>
+</form>
+<tr><td align=right>
+  <a href="http://groups.google.com/group/usbpcap">Visit this group</a>
+</td></tr>
+</table>
+</div>
+
+
+<div id="clear"></div>
+
+</div>
+
+<div id="main_content_bottom">
+</div>
+
+<div id="footer"><a href="#">Back to top</a> | <a href="http://desowin.org">my homepage</a></div>
+
+</div>
+
+</body>
+
+</html>

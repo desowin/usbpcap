@@ -1,0 +1,193 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Strict//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-strict.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<meta name="description" content="USBPcap open source USB sniffer for Windows." />
+<meta name="keywords" content="USBPcap, opensource, windows, usb, sniffer" />
+<title>USBPcap - block diagram</title>
+<link href="style.css" rel="stylesheet" type="text/css" />
+</head>
+
+<!-- Add jQuery library -->
+<script type="text/javascript" src="js/jquery-1.9.0.min.js"></script>
+<!-- Add mousewheel plugin (this is optional) -->
+<script type="text/javascript" src="js/jquery.mousewheel-3.0.6.pack.js"></script>
+<!-- Add fancyBox main JS and CSS files -->
+<script type="text/javascript" src="js/jquery.fancybox.js?v=2.1.4"></script>
+<link rel="stylesheet" type="text/css" href="js/jquery.fancybox.css?v=2.1.4" media="screen" />
+<script type="text/javascript">
+$(document).ready(function() {
+$(".fancybox").fancybox({
+        openEffect	: 'none',
+        closeEffect	: 'none'
+});
+})
+</script>
+<style type="text/css">
+        .fancybox-custom .fancybox-skin {
+                box-shadow: 0 0 50px #222;
+        }
+</style>
+
+<script type="text/javascript">
+var gaJsHost = (("https:" == document.location.protocol) ? "https://ssl." : "http://www.");
+document.write(unescape("%3Cscript src='" + gaJsHost + "google-analytics.com/ga.js' type='text/javascript'%3E%3C/script%3E"));
+</script>
+<script type="text/javascript">
+var pageTracker = _gat._getTracker("UA-6085094-1");
+pageTracker._trackPageview();
+</script>
+
+
+<body>
+
+<div id="container">
+
+<div id="header"><h1>Open Source USB Packet capture for Windows</h1></div>
+
+<div id="sub_header">... works on XP, Vista, 7 and 8</div>
+
+<div id="main_content_top"></div>
+
+<div id="main_content">
+
+<div class="content">
+
+
+<h2>USBPcapDriver block diagram</h2>
+<p>
+USBPcapDriver has three "hats":
+<ul>
+    <li>Root Hub (USBPCAP_MAGIC_ROOTHUB</li>
+    <li>Control (USBPCAP_MAGIC_CONTROL)</li>
+    <li>Device (USBPCAP_MAGIC_DEVICE)</li>
+</ul>
+
+Interactions between USB software stack and USBPcap are marked on block diagrams below.
+</p>
+
+<p>
+Figure 1: USBPcap (driver) in the USB stack.<br/>
+<a class="fancybox" rel="block_diagram" href="images/block_device.png" title="Figure 1: USBPcap (driver) in the USB stack.">
+<img src="images/block_device.png" alt=""/>
+</a>
+<br/>
+Figure 2: USBPcap (control) and USBPcap (Root Hub) in USB stack. This is closer look at the USB devices from Figure 1.
+<br/>
+<a class="fancybox" rel="block_diagram" href="images/block_control.png" title="Figure 2: USBPcap (control) and USBPcap (Root Hub) in USB stack. This is closer look at the USB devices from Figure 1.">
+<img src="images/block_control.png" alt=""/>
+</a>
+</p>
+
+<h3>USBPcap (Root Hub)</h3>
+<p>
+In AddDevice function, which gets called every time new device of GUID {36FC9E60-C465-11CF-8056-444553540000} shows at the system, USBPcap checks if device has hardware ID USB\ROOT_HUB or USB\ROOT_HUB20.
+If hardware ID matches then USBPcap (Root Hub) object gets created and attaches itself onto the USB stack as Upper Filter.
+</p>
+<p>
+For every USBPcap (Root Hub) instance there is one USBPcap (control).
+USBPcap (Root Hub) is responsible for allocating/freeing the capture buffer and tracking devices connected directly to associated root hub.
+</p>
+
+<h3>USBPcap (control)</h3>
+<p>
+USBPcap (control) creates \\.\USBPcapX (where X is natural number) named device that can be used by user-mode application (such as USBPcapCMD) to read captured data from buffer.
+</p>
+<p>
+\\.\USBPcapX accepts following IOCTLs:
+<ul>
+    <li>IOCTL_USBPCAP_SETUP_BUFFER<br/>
+    Parameter: UINT32 size. This IOCTL sets capture buffer size for associated Root Hub. Minimum buffer size is 4096 (4 KiB), maximum 134217728 (128 MiB).
+    This IOCTL may fail if there is not enough free NonPaged Memory to allocate buffer or if there is more unread data than new buffer size.</li>
+    <li>IOCTL_USBPCAP_START_FILTERING</li>
+    <li>IOCTL_USBPCAP_STOP_FILTERING</li>
+    <li>IOCTL_USBPCAP_GET_HUB_SYMLINK<br/>This IOCTL returns named device object name of associated Root Hub. USBPcapCMD uses this name for printing USB devices monitored on given USB bus.</li>
+    <li>IOCTL_USBPCAP_SET_SNAPLEN_SIZE<br/>Parameter: UINT32 size. This IOCTL sets the snaplen field of pcap file.</li>
+</ul>
+</p>
+<p>
+Reading from \\.\USBPcapX returns subsequent data of pcap file containing captured packets. Writing is prohibited.
+</p>
+
+<h3>USBPcap (device)</h3>
+<p>
+USBPcap (Root Hub) creates instances of USBPcap (device).
+USBPcap (device) works as Lower Filter on the USB device stack.
+It captures USB data from URBs (located in I/O Request Packets) passed between FDO and PDO.
+If device is USB hub, then it also tracks the devices connected to it and creates USBPcap (device) instances for every new device connected to it.
+USBPcap (device) keeps track of Pipe Handle descriptions in endpoint table.
+</p>
+
+</div>
+
+
+<div class="menu">
+
+<div class="menu_title">USBPcap</div>
+<ul>
+<li><a href="index.html" class="menu_link">Main page</a></li>
+<li><a href="tour.html" class="menu_link">Illustrated Tour</a></li>
+<li><a href="captureformat.html" class="menu_link">Capture format</a></li>
+<li><a href="capture_limitations.html" class="menu_link">Capture limitations</a></li>
+<li><a href="donors.html" class="menu_link">Donors</a></li>
+</ul>
+
+<div class="menu_title">Develop</div>
+<ul>
+<li><a href="develop.html" class="menu_link">Develop</a></li>
+<li><a href="block_diagram.html" class="menu_link">Block diagram</a></li>
+<li><a href="capture_buffer.html" class="menu_link">Capture buffer</a></li>
+<li><a href="dissectors.html" class="menu_link">Wireshark dissectors</a></li>
+<li><a href="todo.html" class="menu_link">USBPcap TODO</a></li>
+</ul>
+
+<div class="menu_title">Links</div>
+<ul>
+<li><a href="https://github.com/desowin/usbpcap" class="menu_link">GitHub project page</a></li>
+<li><a href="https://github.com/desowin/usbpcap/issues?state=open" class="menu_link">Report issue</a></li>
+<li><a href="https://github.com/desowin/usbpcap/commits/master/" class="menu_link">Changelog</a></li>
+<li><a href="https://github.com/desowin/usbpcap/wiki/" class="menu_link">Wiki</a></li>
+</ul>
+
+
+<a href="https://twitter.com/USBPcap" class="twitter-follow-button" data-show-count="false">Follow @USBPcap</a>
+<script>!function(d,s,id){var js,fjs=d.getElementsByTagName(s)[0],p=/^http:/.test(d.location)?'http':'https';if(!d.getElementById(id)){js=d.createElement(s);js.id=id;js.src=p+'://platform.twitter.com/widgets.js';fjs.parentNode.insertBefore(js,fjs);}}(document, 'script', 'twitter-wjs');</script>
+
+<script type="text/javascript" src="http://www.ohloh.net/p/634708/widgets/project_thin_badge.js"></script>
+
+<table style="background-color: #fff; padding: 1px;" cellspacing=0>
+  <tr><td>
+  <img src="http://groups.google.com/intl/en/images/logos/groups_logo_sm.gif"
+         height=30 width=140 alt="Google Groups">
+  </td></tr>
+  <tr><td style="padding-left: 1px">
+  <b>Subscribe to USBPcap</b>
+  </td></tr>
+  <form action="http://groups.google.com/group/usbpcap/boxsubscribe">
+  <tr><td style="padding-left: 1px;">
+  Email: <input size="10" type=text name=email>
+  <input type=submit name="sub" value="Subscribe">
+  </td></tr>
+</form>
+<tr><td align=right>
+  <a href="http://groups.google.com/group/usbpcap">Visit this group</a>
+</td></tr>
+</table>
+</div>
+
+
+<div id="clear"></div>
+
+</div>
+
+<div id="main_content_bottom">
+</div>
+
+<div id="footer"><a href="#">Back to top</a> | <a href="http://desowin.org">my homepage</a></div>
+
+</div>
+
+</body>
+
+</html>
