@@ -213,8 +213,16 @@ NTSTATUS DkInDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         pNextDevObj = pDevExt->pNextDevObj;
     }
 
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pNextDevObj, pIrp);
+    if (pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else
+    {
+        IoSkipCurrentIrpStackLocation(pIrp);
+        ntStat = IoCallDriver(pNextDevObj, pIrp);
+    }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 

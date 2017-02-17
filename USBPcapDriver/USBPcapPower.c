@@ -57,6 +57,13 @@ NTSTATUS DkPower(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             break;
     }
 
+    if (pDevExt->pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+        return ntStat;
+    }
+
 #if (NTDDI_VERSION < NTDDI_VISTA)
     PoStartNextPowerIrp(pIrp);
 #endif

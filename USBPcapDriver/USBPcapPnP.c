@@ -33,8 +33,16 @@ NTSTATUS DkPnP(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         return ntStat;
     }
 
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    if (pDevExt->pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else
+    {
+        IoSkipCurrentIrpStackLocation(pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
@@ -100,8 +108,16 @@ NTSTATUS DkHubFltPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP 
 
     }
 
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    if (pDevExt->pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else
+    {
+        IoSkipCurrentIrpStackLocation(pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
@@ -177,8 +193,16 @@ NTSTATUS DkTgtPnP(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIRP pIr
 
     }
 
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    if (pDevExt->pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else
+    {
+        IoSkipCurrentIrpStackLocation(pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
@@ -323,8 +347,16 @@ NTSTATUS DkHubFltPnpHandleQryDevRels(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATI
             break;
     }
 
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    if (pDevExt->pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else
+    {
+        IoSkipCurrentIrpStackLocation(pIrp);
+        ntStat = IoCallDriver(pDevExt->pNextDevObj, pIrp);
+    }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 

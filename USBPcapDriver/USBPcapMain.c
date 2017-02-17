@@ -17,7 +17,7 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
     pDrvObj->DriverUnload                = DkUnload;
     pDrvObj->DriverExtension->AddDevice  = AddDevice;
 
-    for (ucCnt = 0; ucCnt < IRP_MJ_MAXIMUM_FUNCTION; ucCnt++)
+    for (ucCnt = 0; ucCnt <= IRP_MJ_MAXIMUM_FUNCTION; ucCnt++)
     {
         pDrvObj->MajorFunction[ucCnt] = DkDefault;
     }
@@ -80,8 +80,16 @@ NTSTATUS DkDefault(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pNextDevObj = pDevExt->pNextDevObj;
 
-    IoSkipCurrentIrpStackLocation(pIrp);
-    ntStat = IoCallDriver(pNextDevObj, pIrp);
+    if (pNextDevObj == NULL)
+    {
+        ntStat = STATUS_INVALID_DEVICE_REQUEST;
+        DkCompleteRequest(pIrp, ntStat, 0);
+    }
+    else
+    {
+        IoSkipCurrentIrpStackLocation(pIrp);
+        ntStat = IoCallDriver(pNextDevObj, pIrp);
+    }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
