@@ -40,7 +40,8 @@ RequestExecutionLevel admin
 
   ; That will have written an uninstaller binary for us.  Now we sign it
   ; with your favourite code signing tool.
-  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS% $%TEMP%\Uninstall.exe' = 0
+  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA1% $%TEMP%\Uninstall.exe' = 0
+  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA256% $%TEMP%\Uninstall.exe' = 0
 
   ; Good.  Now we can carry on writing the real installer.
 
@@ -49,7 +50,7 @@ RequestExecutionLevel admin
 
   VIAddVersionKey "ProductName" "USBPcap"
   VIAddVersionKey "ProductVersion" "${VERSION}"
-  VIAddVersionKey "LegalCopyright" "(c) 2013 Tomasz Mon"
+  VIAddVersionKey "LegalCopyright" "(c) 2013-2015 Tomasz Mon"
   VIAddVersionKey "FileDescription" "USBPcap installer"
   VIAddVersionKey "FileVersion" "${VERSION}"
   VIProductVersion "${VERSION}"
@@ -106,6 +107,26 @@ done:
     Quit
   ${EndIf}
   
+  ; Make sure we have the SHA-2 hotfix installed on Windows 7
+  ; https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=11766
+  ${If} ${IsWin7}
+  ${OrIf} ${IsWin2008R2}
+    ; Use `wmic qfe`. Slow. 8 - 9 seconds here.
+    Var /GLOBAL COMSPEC
+    Var /GLOBAL QFE_RESULT
+
+    ExpandEnvStrings $COMSPEC %COMSPEC%
+    nsExec::ExecToStack '"$COMSPEC" /C wmic qfe get Hotfixid | findstr KB3033929'
+    Pop $QFE_RESULT
+
+    ${If} $QFE_RESULT == "0"
+      ;MessageBox MB_OK "Hotfix KB 3033929 found"
+    ${Else}
+      MessageBox MB_OK "Hotfix KB 3033929 must be installed on Windows 7 or 2008R2."
+      Quit
+    ${EndIf}
+  ${EndIf}
+
   ${If} ${RunningX64}
     StrCpy $INSTDIR "$PROGRAMFILES64\USBPcap"
   ${Else}
@@ -232,7 +253,7 @@ Section "Uninstall"
   CMDExists:
     Delete $INSTDIR\USBPcapCMD.exe
   PastCMDCheck:
-  RMDir /R /REBOOTOK $INSTDIR
+  RMDir /REBOOTOK $INSTDIR
 
   DeleteRegKey HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap"
   ${If} ${RunningX64}
