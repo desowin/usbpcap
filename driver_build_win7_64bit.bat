@@ -26,7 +26,7 @@ CALL config.bat
 build -ceZg
 if exist build%BUILD_ALT_DIR%.err goto error
 
-%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS% USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
 if errorlevel 1 goto error
 
 Inf2cat.exe /driver:USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\ /os:%USBPcap_OS%
