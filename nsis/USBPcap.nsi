@@ -2,6 +2,8 @@
 !include "x64.nsh"
 !include "WinVer.nsh"
 
+!addplugindir .
+
 !macro __MOZ__WinVer_DefineOSTests WinVer
   !insertmacro __WinVer_DefineOSTest AtLeast ${WinVer} ""
   !insertmacro __WinVer_DefineOSTest AtMost ${WinVer} ""
@@ -106,7 +108,7 @@ done:
     MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
     Quit
   ${EndIf}
-  
+
   ; Make sure we have the SHA-2 hotfix installed on Windows 7
   ; https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=11766
   ${If} ${IsWin7}
@@ -143,12 +145,26 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
   SectionIn RO
   SetOutPath "$INSTDIR"
 
+  Var /GLOBAL restore_point_success
+  !define RESTORE_POINT_NAME_INSTALL "USBPcap ${VERSION} installation"
+
+  DetailPrint "Start setting system restore point: ${RESTORE_POINT_NAME_INSTALL}"
+  SysRestore::StartRestorePoint /NOUNLOAD "${RESTORE_POINT_NAME_INSTALL}"
+  Pop $0
+  ${If} $0 != 0
+    DetailPrint "Error occurred when starting setting system restore point, return value=|$0|"
+  ${Else}
+    StrCpy $restore_point_success "yes"
+  ${Endif}
+
   ${If} ${RunningX64}
     ${DisableX64FSRedirection}
     SetRegView 64
   ${EndIf}
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
                    "DisplayName" "USBPcap ${VERSION}"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                   "DisplayVersion" "${VERSION}"
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
                    "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
@@ -195,6 +211,7 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
   ${EndIf}
 
   ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf'
+
   ${If} ${RunningX64}
     ${EnableX64FSRedirection}
   ${EndIf}
@@ -213,6 +230,15 @@ Section "USBPcapCMD" SEC_USBPCAPCMD
     File /oname=USBPcapCMD.exe "..\Release\USBPcapCMD_x64.exe"
   ${Else}
     File /oname=USBPcapCMD.exe "..\Release\USBPcapCMD_x86.exe"
+  ${EndIf}
+
+  ${If} $restore_point_success == "yes"
+    DetailPrint "Finish setting system restore point: ${RESTORE_POINT_NAME_INSTALL}"
+    SysRestore::FinishRestorePoint /NOUNLOAD
+    Pop $0
+    ${If} $0 != 0
+      DetailPrint "Error occurred when finishing setting system restore point, return value=|$0|"
+    ${EndIf}
   ${EndIf}
 SectionEnd
 
