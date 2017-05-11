@@ -45,7 +45,7 @@ RequestExecutionLevel admin
   ; That will have written an uninstaller binary for us.  Now we sign it
   ; with your favourite code signing tool.
   !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA1% $%TEMP%\Uninstall.exe' = 0
-  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA256% $%TEMP%\Uninstall.exe' = 0
+  ;!system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA256% $%TEMP%\Uninstall.exe' = 0
 
   ; Good.  Now we can carry on writing the real installer.
 
@@ -109,40 +109,6 @@ done:
   ${IfNot} ${AtLeastWinXP}
     MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
     Quit
-  ${EndIf}
-
-  ; Make sure we have the SHA-2 hotfix installed on Windows 7
-  ; https://bugs.wireshark.org/bugzilla/show_bug.cgi?id=11766
-  ${If} ${IsWin7}
-  ${OrIf} ${IsWin2008R2}
-    ; KB3033929 check is based on dokan wix installer
-    ; https://github.com/dokan-dev/dokany/commit/90bd2c88c83dae9986dca60ea4d6c386ad9e0ed2
-    ; (WINTRUSTVERSION >= v6.1.7601.18741 AND WINTRUSTVERSION < v6.1.7601.22000) OR
-    ;  WINTRUSTVERSION >= v6.1.7601.22948)
-    Var /GLOBAL WINTRUSTVERSION
-    ${GetFileVersion} "$SYSDIR\Wintrust.dll" $WINTRUSTVERSION
-    ${VersionCompare} $WINTRUSTVERSION "6.1.7601.22948" $R0
-    ${If} $R0 == 2
-      ; $WINTRUSTVERSION < "6.1.7601.22948"
-      ${VersionCompare} $WINTRUSTVERSION "6.1.7601.22000" $R0
-      ${If} $R0 == 2
-        ; $WINTRUSTVERSION < "6.1.7601.22000"
-        ${VersionCompare} $WINTRUSTVERSION "6.1.7601.18741" $R0
-        ${If} $R0 == 2
-          ; MessageBox MB_OK "WINTRUSTVERSION < 6.1.7601.18741"
-          MessageBox MB_OK "Hotfix KB 3033929 must be installed on Windows 7 or 2008R2."
-          Quit
-        ${Else}
-          ; MessageBox MB_OK "WINTRUSTVERSION >= 6.1.7601.18741 AND WINTRUSTVERSION < 6.1.7601.22000"
-        ${EndIf}
-      ${Else}
-        ; $WINTRUSTVERSION >= "6.1.7601.22000"
-        MessageBox MB_OK "Hotfix KB 3033929 must be installed on Windows 7 or 2008R2."
-        Quit
-      ${EndIf}
-    ${Else}
-      ; MessageBox MB_OK "WINTRUSTVERSION >= 6.1.7601.22948"
-    ${EndIf}
   ${EndIf}
 
   ${If} ${RunningX64}

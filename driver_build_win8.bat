@@ -22,7 +22,7 @@ if exist %USBPcap_builddir% RMDIR /S /Q %USBPcap_builddir%
 Nmake2MsBuild dirs
 MSBuild dirs.sln /p:Configuration="Win8 Release"
 
-%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% %USBPcap_builddir%\USBPcap.sys
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% %USBPcap_builddir%\USBPcap.sys
 if errorlevel 1 goto error
 
 Inf2cat.exe /driver:%USBPcap_builddir%\ /os:%USBPcap_OS%
@@ -38,7 +38,7 @@ exit /B 1
 copy %USBPcap_builddir%\USBPcap.sys %2
 copy %USBPcap_builddir%\USBPcap.inf %2
 copy %USBPcap_builddir%\%USBPcap_catalog% %2
-%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% %2\%USBPcap_catalog%
+%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% %2\%USBPcap_catalog%
 if errorlevel 1 goto error
 
 exit /B 0

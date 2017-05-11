@@ -38,14 +38,14 @@ if exist build%BUILD_ALT_DIR%.err goto error
 
 ::Sign the USBPcapCMD.exe, it is not critical so do not fail on error
 %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% USBPcapCMD\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcapCMD.exe
-%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% USBPcapCMD\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcapCMD.exe
+::%_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% USBPcapCMD\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcapCMD.exe
 
 %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
 if errorlevel 1 goto error
-if "%DDK_TARGET_OS%"=="Win7" (
-    %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
-    if errorlevel 1 goto error
-)
+::if "%DDK_TARGET_OS%"=="Win7" (
+::    %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys
+::    if errorlevel 1 goto error
+::)
 
 Inf2cat.exe /driver:USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\ /os:%USBPcap_OS%
 
@@ -63,9 +63,9 @@ copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.inf %3
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\%USBPcap_catalog% %3
 %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% %3\%USBPcap_catalog%
 if errorlevel 1 goto error
-if "%DDK_TARGET_OS%"=="Win7" (
-    %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% %3\%USBPcap_catalog%
-    if errorlevel 1 goto error
-)
+::if "%DDK_TARGET_OS%"=="Win7" (
+::    %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA256% %3\%USBPcap_catalog%
+::    if errorlevel 1 goto error
+::)
 
 exit /B 0
