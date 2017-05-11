@@ -39,7 +39,7 @@ USBPcap.sys
 AddService = USBPcap,,Service.AddService
 
 [DefaultUninstall.NT.Services]
-DelService = USBPcap
+DelService = USBPcap,0x00000200
 
 [Service.AddService]
 DisplayName    = %USBPcap.SvcDesc%
@@ -52,6 +52,6 @@ ServiceBinary  = %12%\USBPcap.sys
 PROVIDER             = "USBPcap"
 StdMfg               = "USBPcap Developers"
 DiskId1              = "USBPcap Installation Disk #1"
-USBPcap.DeviceDesc    = "USBPcap Filter Driver"
-USBPcap.SvcDesc       = "USBPcap Capture Service"
+USBPcap.DeviceDesc   = "USBPcap Filter Driver"
+USBPcap.SvcDesc      = "USBPcap Capture Service"
 
