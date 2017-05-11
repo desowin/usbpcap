@@ -54,7 +54,7 @@ RequestExecutionLevel admin
 
   VIAddVersionKey "ProductName" "USBPcap"
   VIAddVersionKey "ProductVersion" "${VERSION}"
-  VIAddVersionKey "LegalCopyright" "(c) 2013-2015 Tomasz Mon"
+  VIAddVersionKey "LegalCopyright" "(c) 2013-2017 Tomasz Mon"
   VIAddVersionKey "FileDescription" "USBPcap installer"
   VIAddVersionKey "FileVersion" "${VERSION}"
   VIProductVersion "${VERSION}"
@@ -99,13 +99,24 @@ Function .onInit
   ${If} ${RunningX64}
     ${EnableX64FSRedirection}
   ${EndIf}
-  StrCmp $R0 "" done
+  StrCmp $R0 "" not_installed
 
   MessageBox MB_OK|MB_ICONEXCLAMATION \
-  "USBPcap is already installed. Please uninstall it first."
+  "USBPcap is already installed. Please uninstall it first.$\r$\nMake sure to reboot after uninstall."
   Abort
 
-done:
+not_installed:
+  ; Check if USBPcap driver service is pending removal
+  ClearErrors
+  ReadRegDWORD $0 HKLM "SYSTEM\CurrentControlSet\services\USBPcap" "DeleteFlag"
+  IfErrors no_removal_pending
+  ; DeleteFlag exists. On Windows 7 it seems that it will result in USBPcap
+  ; service getting removed after reboot no matter what DeleteFlag value is
+  MessageBox MB_OK|MB_ICONEXCLAMATION \
+  "USBPcap driver service is pending removal.$\r$\nReboot is required before installation."
+  Abort
+
+no_removal_pending:
   ${IfNot} ${AtLeastWinXP}
     MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
     Quit
@@ -151,6 +162,14 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
                    "UninstallString" "$\"$INSTDIR\Uninstall.exe$\""
   WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
                    "QuietUninstallString" "$\"$INSTDIR\Uninstall.exe$\" /S"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                   "URLInfoAbout" "http://desowin.org/usbpcap"
+  WriteRegStr HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                   "Publisher" "Tomasz Mon"
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                     "NoModify" 1
+  WriteRegDWORD HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\USBPcap" \
+                     "NoRepair" 1
 
   ${If} ${RunningX64}
     ${If} ${AtLeastWin8}
@@ -192,7 +211,7 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
     ${EndIf}
   ${EndIf}
 
-  ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 128 .\USBPcap.inf'
+  ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultInstall 132 .\USBPcap.inf'
 
   ${If} ${RunningX64}
     ${EnableX64FSRedirection}
@@ -246,7 +265,7 @@ Section "Uninstall"
     SetRegView 64
   ${EndIf}
   SetOutPath "$INSTDIR"
-  ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultUninstall 128 .\USBPcap.inf'
+  ExecWait '$SYSDIR\RUNDLL32.EXE SETUPAPI.DLL,InstallHinfSection DefaultUninstall 132 .\USBPcap.inf'
 
   Delete $INSTDIR\Uninstall.exe
   Delete $INSTDIR\USBPcap.inf
