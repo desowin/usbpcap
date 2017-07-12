@@ -284,6 +284,7 @@ NTSTATUS DkTgtInDevCtl(PDEVICE_EXTENSION pDevExt, PIO_STACK_LOCATION pStack, PIR
 
 NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
 {
+    NTSTATUS            status;
     PDEVICE_EXTENSION   pDevExt = NULL;
     PURB                pUrb = NULL;
     PIO_STACK_LOCATION  pStack = NULL;
@@ -291,10 +292,12 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
     if (pIrp->PendingReturned)
         IoMarkIrpPending(pIrp);
 
+    status = pIrp->IoStatus.Status;
+
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
     // URB is collected AFTER forward to bus driver or next lower object
-    if (NT_SUCCESS(pIrp->IoStatus.Status))
+    if (NT_SUCCESS(status))
     {
         pStack = IoGetCurrentIrpStackLocation(pIrp);
         pUrb = (PURB) pStack->Parameters.Others.Argument1;
@@ -315,5 +318,5 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
 
-    return STATUS_SUCCESS;
+    return status;
 }

@@ -129,9 +129,6 @@ NTSTATUS DkGenCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
     if (pEvt == NULL)
         return STATUS_UNSUCCESSFUL;
 
-    if (pIrp->PendingReturned)
-        IoMarkIrpPending(pIrp);
-
     KeSetEvent(pEvt, IO_NO_INCREMENT, FALSE);
 
     return STATUS_MORE_PROCESSING_REQUIRED;
