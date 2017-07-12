@@ -12,6 +12,8 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
 {
     UCHAR  ucCnt = 0;
 
+    ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
+
     DkDbgStr("3");
 
     pDrvObj->DriverUnload                = DkUnload;

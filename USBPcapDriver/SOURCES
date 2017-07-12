@@ -14,6 +14,8 @@ TARGETLIBS = $(DDK_LIB_PATH)\Wdm.lib \
              $(DDK_LIB_PATH)\Ntoskrnl.lib \
              $(DDK_LIB_PATH)\USBd.lib
 
+C_DEFINES=$(C_DEFINES) -DPOOL_NX_OPTIN=1
+
 INCLUDES = $(DDK_INC_PATH); \
            $(WDM_INC_PATH);
 
