@@ -12,7 +12,10 @@ NTSTATUS DriverEntry(PDRIVER_OBJECT pDrvObj, PUNICODE_STRING pUsRegPath)
 {
     UCHAR  ucCnt = 0;
 
+/* Building for Windows 8 or newer. */
+#if _MSC_VER >= 1800
     ExInitializeDriverRuntime(DrvRtPoolNxOptIn);
+#endif
 
     DkDbgStr("3");
 
