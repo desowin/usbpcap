@@ -45,7 +45,7 @@ DelService = USBPcap,0x00000200
 DisplayName    = %USBPcap.SvcDesc%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
 StartType      = 3               ; SERVICE_DEMAND_START
-ErrorControl   = 1               ; SERVICE_ERROR_NORMAL
+ErrorControl   = 2               ; SERVICE_ERROR_SEVERE
 ServiceBinary  = %12%\USBPcap.sys
 
 [Strings]
