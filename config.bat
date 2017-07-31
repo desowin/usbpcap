@@ -20,4 +20,4 @@ set _USBPCAP_SIGN_OPTS_SHA1=sign /v /fd sha1 /f %~dp0certificates\USBPcapTestCer
 ::_USBPCAP_VERSION specifies version of the installer.
 ::To update driver version edit USBPcapDriver\USBPcap.rc and
 ::USBPcapDriver\SOURCES
-set _USBPCAP_VERSION="1.2.0.1"
+set _USBPCAP_VERSION="1.2.0.2"
