@@ -172,7 +172,11 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
                      "NoRepair" 1
 
   ${If} ${RunningX64}
-    ${If} ${AtLeastWin8}
+    ${If} ${AtLeastWin10}
+      File "..\Release\Windows10\x64\USBPcap.inf"
+      File "..\Release\Windows10\x64\USBPcap.sys"
+      File "..\Release\Windows10\x64\USBPcapamd64.cat"
+    ${ElseIf} ${AtLeastWin8}
       File "..\Release\Windows8\x64\USBPcap.inf"
       File "..\Release\Windows8\x64\USBPcap.sys"
       File "..\Release\Windows8\x64\USBPcapamd64.cat"
@@ -191,7 +195,11 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
       File "..\Release\XP\x64\USBPcapamd64.cat"
     ${EndIf}
   ${Else}
-    ${If} ${AtLeastWin8}
+    ${If} ${AtLeastWin10}
+      File "..\Release\Windows10\x86\USBPcap.inf"
+      File "..\Release\Windows10\x86\USBPcap.sys"
+      File "..\Release\Windows10\x86\USBPcapx86.cat"
+    ${ElseIf} ${AtLeastWin8}
       File "..\Release\Windows8\x86\USBPcap.inf"
       File "..\Release\Windows8\x86\USBPcap.sys"
       File "..\Release\Windows8\x86\USBPcapx86.cat"
