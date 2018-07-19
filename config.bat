@@ -1,5 +1,7 @@
-::Change code page to UTF-8
-chcp 65001
+::Change code page to UTF-8 when building official release and your cerificate
+::has non-ASCII characters in name
+::Do not change it by default as this seems to cause problems with AppVeyor
+::chcp 65001
 
 ::Use SignTool from Windows Driver Kit
 set _USBPCAP_SIGNTOOL="C:\WinDDK\7600.16385.1\bin\amd64\SignTool.exe"
