@@ -1040,6 +1040,9 @@ int cmd_extcap(void *options, struct thread_data *data)
 {
     const char *extcap_interface = NULL;
 
+    /* --extcap-version */
+    /* Ignored for now */
+
     /* --extcap-interfaces */
     if (gopt(options, '1'))
     {
@@ -1210,6 +1213,7 @@ int __cdecl main(int argc, CHAR **argv)
     const char *const I_long[] = {"init-non-standard-hwids", NULL};
 
     /* Extcap interface. */
+    const char *const _0_long[] = {"extcap-version", NULL};
     const char *const _1_long[] = {"extcap-interfaces", NULL};
     const char *const _2_long[] = {"extcap-interface", NULL};
     const char *const _3_long[] = {"extcap-dlts", NULL};
@@ -1217,7 +1221,6 @@ int __cdecl main(int argc, CHAR **argv)
     const char *const _5_long[] = {"capture", NULL};
     const char *const _6_long[] = {"fifo", NULL};
 
-    /* Currently ignored. */
     const char *const _7_long[] = {"devices", NULL};
     const char *const _8_long[] = {"capture-from-all-devices", NULL};
     const char *const _9_long[] = {"capture-from-new-devices", NULL};
@@ -1232,6 +1235,7 @@ int __cdecl main(int argc, CHAR **argv)
         /* Extcap interface. Please note that there are no short
          * options for these and the numbers are just gopt keys.
          */
+        {'0', GOPT_ARG, "", _0_long},
         {'1', 0, "", _1_long},
         {'2', GOPT_ARG, "", _2_long},
         {'3', 0, "", _3_long},
@@ -1287,9 +1291,10 @@ int __cdecl main(int argc, CHAR **argv)
     }
 
     /* Handle extcap options separately from standard USBPcapCMD options. */
-    if (gopt(options, '1') || gopt(options, '2') ||
-        gopt(options, '3') || gopt(options, '4') ||
-        gopt(options, '5') || gopt(options, '6'))
+    if (gopt(options, '0') || gopt(options, '1') ||
+        gopt(options, '2') || gopt(options, '2') ||
+        gopt(options, '4') || gopt(options, '3') ||
+        gopt(options, '6'))
     {
         /* Make sure we don't go any further. */
         int ret = cmd_extcap(options, &data);
