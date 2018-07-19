@@ -1044,7 +1044,7 @@ int cmd_extcap(void *options, struct thread_data *data)
     /* Ignored for now */
 
     /* --extcap-interfaces */
-    if (gopt(options, '2'))
+    if (gopt(options, '1'))
     {
         int i = 0;
         filters_initialize();
@@ -1071,29 +1071,29 @@ int cmd_extcap(void *options, struct thread_data *data)
     }
 
     /* --extcap-interface */
-    gopt_arg(options, '3', &extcap_interface);
+    gopt_arg(options, '2', &extcap_interface);
 
     /* --extcap-dlts */
-    if (gopt(options, '4'))
+    if (gopt(options, '3'))
     {
         printf("dlt {number=249}{name=USBPCAP}{display=USBPcap}\n");
         return 0;
     }
 
     /* --extcap-config */
-    if (gopt(options, '5'))
+    if (gopt(options, '4'))
     {
         return print_extcap_options(extcap_interface);
     }
 
     /* --capture */
-    if (gopt(options, '6'))
+    if (gopt(options, '5'))
     {
         const char *tmp;
         const char *fifo = NULL;
 
         /* --fifo */
-        gopt_arg(options, '7', &fifo);
+        gopt_arg(options, '6', &fifo);
         if ((fifo == NULL) || (extcap_interface == NULL))
         {
             /* No fifo nor interface to capture from. */
@@ -1213,18 +1213,17 @@ int __cdecl main(int argc, CHAR **argv)
     const char *const I_long[] = {"init-non-standard-hwids", NULL};
 
     /* Extcap interface. */
-    const char *const _1_long[] = {"extcap-version", NULL};
-    const char *const _2_long[] = {"extcap-interfaces", NULL};
-    const char *const _3_long[] = {"extcap-interface", NULL};
-    const char *const _4_long[] = {"extcap-dlts", NULL};
-    const char *const _5_long[] = {"extcap-config", NULL};
-    const char *const _6_long[] = {"capture", NULL};
-    const char *const _7_long[] = {"fifo", NULL};
+    const char *const _0_long[] = {"extcap-version", NULL};
+    const char *const _1_long[] = {"extcap-interfaces", NULL};
+    const char *const _2_long[] = {"extcap-interface", NULL};
+    const char *const _3_long[] = {"extcap-dlts", NULL};
+    const char *const _4_long[] = {"extcap-config", NULL};
+    const char *const _5_long[] = {"capture", NULL};
+    const char *const _6_long[] = {"fifo", NULL};
 
-    /* Currently ignored. */
-    const char *const _8_long[] = {"devices", NULL};
-    const char *const _9_long[] = {"capture-from-all-devices", NULL};
-    const char *const _10_long[] = {"capture-from-new-devices", NULL};
+    const char *const _7_long[] = {"devices", NULL};
+    const char *const _8_long[] = {"capture-from-all-devices", NULL};
+    const char *const _9_long[] = {"capture-from-new-devices", NULL};
     opt_spec_t opt_specs[] = {
         {'h', 0, "h?", h_long},
         {'d', GOPT_ARG, "d", d_long},
@@ -1236,17 +1235,17 @@ int __cdecl main(int argc, CHAR **argv)
         /* Extcap interface. Please note that there are no short
          * options for these and the numbers are just gopt keys.
          */
-        {'1', GOPT_ARG, "", _1_long},
-        {'2', 0, "", _2_long},
-        {'3', GOPT_ARG, "", _3_long},
+        {'0', GOPT_ARG, "", _0_long},
+        {'1', 0, "", _1_long},
+        {'2', GOPT_ARG, "", _2_long},
+        {'3', 0, "", _3_long},
         {'4', 0, "", _4_long},
         {'5', 0, "", _5_long},
-        {'6', 0, "", _6_long},
-        {'7', GOPT_ARG, "", _7_long},
+        {'6', GOPT_ARG, "", _6_long},
 
-        {'8', GOPT_ARG, "", _8_long},
-        {'9', 0, "A", _9_long},
-        {'10', 0, "", _10_long},
+        {'7', GOPT_ARG, "", _7_long},
+        {'8', 0, "A", _8_long},
+        {'9', 0, "", _9_long},
         {0},
     };
 
@@ -1256,12 +1255,12 @@ int __cdecl main(int argc, CHAR **argv)
 
     data.filename = NULL;
     data.device = NULL;
-    if (!gopt_arg(options, '8', &data.address_list))
+    if (!gopt_arg(options, '7', &data.address_list))
     {
         data.address_list = NULL;
     }
-    data.capture_all = gopt(options, '9') ? TRUE : FALSE;
-    data.capture_new = gopt(options, '10') ? TRUE : FALSE;
+    data.capture_all = gopt(options, '8') ? TRUE : FALSE;
+    data.capture_new = gopt(options, '9') ? TRUE : FALSE;
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
@@ -1292,10 +1291,10 @@ int __cdecl main(int argc, CHAR **argv)
     }
 
     /* Handle extcap options separately from standard USBPcapCMD options. */
-    if (gopt(options, '1') || gopt(options, '2') ||
-        gopt(options, '3') || gopt(options, '4') ||
-        gopt(options, '5') || gopt(options, '6') || 
-        gopt(options, '7'))
+    if (gopt(options, '0') || gopt(options, '1') ||
+        gopt(options, '2') || gopt(options, '2') ||
+        gopt(options, '4') || gopt(options, '3') ||
+        gopt(options, '6'))
     {
         /* Make sure we don't go any further. */
         int ret = cmd_extcap(options, &data);
