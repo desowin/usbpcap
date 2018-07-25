@@ -192,12 +192,16 @@ DWORD WINAPI read_thread(LPVOID param)
             /* Standard read */
             GetOverlappedResult(data->read_handle, &read_overlapped, &read, TRUE);
             ResetEvent(read_overlapped.hEvent);
-            WriteFile(data->write_handle, buffer, read, &written, NULL);
+            if (!WriteFile(data->write_handle, buffer, read, &written, NULL))
+            {
+                /* Failed to write to output. Quit. */
+                data->process = FALSE;
+            }
             FlushFileBuffers(data->write_handle);
         }
         else if (i == (WAIT_OBJECT_0 + 1))
         {
-            /* Most likely broker pipe detected */
+            /* Most likely broken pipe detected */
             GetOverlappedResult(data->write_handle, &write_handle_read_overlapped, &dummy_read, TRUE);
             if (GetLastError() == ERROR_BROKEN_PIPE)
             {
@@ -220,6 +224,12 @@ finish:
     if (buffer != NULL)
     {
         free(buffer);
+    }
+
+    /* Notify main thread that we are done. */
+    if (data->exit_event != INVALID_HANDLE_VALUE)
+    {
+        SetEvent(data->exit_event);
     }
 
     return 0;

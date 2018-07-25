@@ -694,6 +694,93 @@ int cmd_interactive(struct thread_data *data)
     return 0;
 }
 
+/**
+ * Wait for exit signal.
+ *
+ * Wait for either 'q' on standard input, data->exit_event or worker process termination.
+ *
+ * \param[in] data Thread data structure
+ * \param[in] process Worker process handle
+ *                    INVALID_HANDLE_VALUE if not using elevated worker.
+ */
+static void wait_for_exit_signal(struct thread_data *data, HANDLE process)
+{
+    HANDLE handle_table[3] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+    HANDLE stdin_handle = GetStdHandle(STD_INPUT_HANDLE);
+    DWORD dw;
+    int count = 0;
+
+    /* Verify that stdin_handle can be used. */
+    dw = WaitForSingleObject(stdin_handle, 0);
+    if (dw == WAIT_FAILED)
+    {
+        stdin_handle = INVALID_HANDLE_VALUE;
+    }
+
+    if (stdin_handle != INVALID_HANDLE_VALUE)
+    {
+        handle_table[count] = stdin_handle;
+        count++;
+    }
+
+    if (data->exit_event != INVALID_HANDLE_VALUE)
+    {
+        handle_table[count] = data->exit_event;
+        count++;
+    }
+
+    if (process != INVALID_HANDLE_VALUE)
+    {
+        handle_table[count] = process;
+        count++;
+    }
+
+    /* Wait for exit condition. */
+    while (data->process == TRUE)
+    {
+        dw = WaitForMultipleObjects(count, handle_table, FALSE, INFINITE);
+#pragma warning(default : 4296)
+        if ((dw >= WAIT_OBJECT_0) && dw < (WAIT_OBJECT_0 + count))
+        {
+            int i = dw - WAIT_OBJECT_0;
+            if (handle_table[i] == stdin_handle)
+            {
+                /* There is something new on standard input. */
+                INPUT_RECORD record;
+                DWORD events_read;
+
+                if (ReadConsoleInput(stdin_handle, &record, 1, &events_read))
+                {
+                    if (record.EventType == KEY_EVENT)
+                    {
+                        if ((record.Event.KeyEvent.bKeyDown == TRUE) &&
+                            (record.Event.KeyEvent.uChar.AsciiChar == 'q'))
+                        {
+                            /* There is 'q' on standard input. Quit. */
+                            break;
+                        }
+                    }
+                }
+            }
+            else if (handle_table[i] == process)
+            {
+                /* Elevated worker process terminated. Quit. */
+                break;
+            }
+            else if (handle_table[i] == data->exit_event)
+            {
+                /* Read thread has finished. Quit. */
+                break;
+            }
+        }
+        else if (dw == WAIT_FAILED)
+        {
+            fprintf(stderr, "WaitForMultipleObjects failed in wait_for_exit_signal(): %d", GetLastError());
+            break;
+        }
+    }
+}
+
 static void start_capture(struct thread_data *data)
 {
     HANDLE pipe_handle = INVALID_HANDLE_VALUE;
@@ -914,58 +1001,7 @@ static void start_capture(struct thread_data *data)
         }
     }
 
-    /* Wait for exit signal. */
-    for (;data->process == TRUE;)
-    {
-        /* Wait for either 'q' on standard input or worker process termination. */
-        HANDLE handle_table[2];
-        HANDLE stdin_handle = GetStdHandle(STD_INPUT_HANDLE);
-        DWORD dw;
-        int count = 0;
-
-        if (stdin_handle != INVALID_HANDLE_VALUE)
-        {
-            handle_table[count] = stdin_handle;
-            count++;
-        }
-
-        if (process != INVALID_HANDLE_VALUE)
-        {
-            handle_table[count] = process;
-            count++;
-        }
-
-        dw = WaitForMultipleObjects(count, handle_table, FALSE, INFINITE);
-#pragma warning(default : 4296)
-        if ((dw >= WAIT_OBJECT_0) && dw < (WAIT_OBJECT_0 + count))
-        {
-            int i = dw - WAIT_OBJECT_0;
-            if (handle_table[i] == stdin_handle)
-            {
-                /* There is something new on standard input. */
-                INPUT_RECORD record;
-                DWORD events_read;
-
-                if (ReadConsoleInput(stdin_handle, &record, 1, &events_read))
-                {
-                    if (record.EventType == KEY_EVENT)
-                    {
-                        if ((record.Event.KeyEvent.bKeyDown == TRUE) &&
-                            (record.Event.KeyEvent.uChar.AsciiChar == 'q'))
-                        {
-                            /* There is 'q' on standard input. Quit. */
-                            break;
-                        }
-                    }
-                }
-            }
-            else if (handle_table[i] == process)
-            {
-                /* Elevated worker process terminated. Quit. */
-                break;
-            }
-        }
-    }
+    wait_for_exit_signal(data, process);
 
     /* Closing read and write handles will terminate worker thread/process. */
 
@@ -1265,6 +1301,10 @@ int __cdecl main(int argc, CHAR **argv)
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
     data.worker_process_thread = INVALID_HANDLE_VALUE;
+    data.exit_event = CreateEvent(NULL, /* Handle cannot be inherited */
+                                  TRUE, /* Manual Reset */
+                                  FALSE, /* Default to not signalled */
+                                  NULL);
 
     if (gopt(options, 'h'))
     {
@@ -1305,6 +1345,10 @@ int __cdecl main(int argc, CHAR **argv)
         if (data.job_handle != INVALID_HANDLE_VALUE)
         {
             CloseHandle(data.job_handle);
+        }
+        if (data.exit_event != INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(data.exit_event);
         }
         return ret;
     }
@@ -1403,6 +1447,11 @@ int __cdecl main(int argc, CHAR **argv)
     if (data.job_handle != INVALID_HANDLE_VALUE)
     {
         CloseHandle(data.job_handle);
+    }
+
+    if (data.exit_event != INVALID_HANDLE_VALUE)
+    {
+        CloseHandle(data.exit_event);
     }
 
     return 0;

@@ -42,6 +42,7 @@ struct thread_data
     HANDLE write_handle; /* Handle to write data to. */
     HANDLE job_handle; /* Handle to job object of worker process. */
     HANDLE worker_process_thread; /* Handle to breakaway worker process main thread. */
+    HANDLE exit_event; /* Handle to event that indicates that main thread should exit. */
 };
 
 HANDLE create_filter_read_handle(struct thread_data *data);
