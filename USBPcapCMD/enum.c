@@ -27,6 +27,11 @@
 #define OOPS()
 #endif
 
+/* Sanity limit for loops.
+ * If a loop has more iterations, error message is printed and loop is stopped.
+ */
+#define LOOP_SANITY_LIMIT 10000
+
 void wide_print(LPCWSTR string) {
     HANDLE std_out;
     BOOL console_output;
@@ -464,6 +469,7 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent,
     USHORT     parentNode = 0;
     USHORT     nextNode = 1;
     Stack      *nodeStack = NULL;
+    DWORD      sanityCounter = 0;
 
     level = indent;
     current = parent;
@@ -482,6 +488,14 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent,
      */
     while (level > indent)
     {
+        if ((++sanityCounter) > LOOP_SANITY_LIMIT)
+        {
+            if (enumType != ENUMERATE_EXTCAP)
+            {
+                fprintf(stderr, "Sanity check failed in PrintDevinstChildren()\n");
+            }
+            return;
+        }
         len = sizeof(buf) / sizeof(buf[0]);
         cr = CM_Get_DevNode_Registry_PropertyW(current,
                                                CM_DRP_FRIENDLYNAME,
@@ -554,24 +568,34 @@ static VOID PrintDevinstChildren(DEVINST parent, ULONG indent,
                 nextNode++;
                 break;
             }
-
-            cr = CM_Get_Parent(&next, current, 0);
-
-            if (cr == CR_SUCCESS)
+            else if (cr == CR_NO_SUCH_DEVNODE)
             {
-                current = next;
-                level--;
-                stack_pop(&nodeStack, &parentNode);
-                if (current == parent || level == indent)
+                cr = CM_Get_Parent(&next, current, 0);
+
+                if (cr == CR_SUCCESS)
                 {
-                    /* We went back to the parent, explicitly return here */
+                    current = next;
+                    level--;
+                    stack_pop(&nodeStack, &parentNode);
+                    if (current == parent || level == indent)
+                    {
+                        /* We went back to the parent, explicitly return here */
+                        return;
+                    }
+                }
+                else
+                {
+                    while (TRUE == stack_pop(&nodeStack, &parentNode));
+                    /* Nothing left to do */
                     return;
                 }
             }
             else
             {
-                while (TRUE == stack_pop(&nodeStack, &parentNode));
-                /* Nothing left to do */
+                if (enumType != ENUMERATE_EXTCAP)
+                {
+                    fprintf(stderr, "CM_Get_Sibling() returned 0x%08X\n", cr);
+                }
                 return;
             }
         }
@@ -589,6 +613,10 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
     ULONG      len;
     TCHAR      buf[MAX_DEVICE_ID_LEN];
 
+    // Sanity counters to prevent endless loops
+    DWORD      sanityOuter = 0;
+    DWORD      sanityInner = 0;
+
     // Get Root DevNode
     cr = CM_Locate_DevNode(&devInst, NULL, 0);
 
@@ -601,6 +629,14 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
     // DriverName value
     while (!walkDone)
     {
+        if ((++sanityOuter) > LOOP_SANITY_LIMIT)
+        {
+            if (enumType != ENUMERATE_EXTCAP)
+            {
+                fprintf(stderr, "Sanity check failed in PrintDeviceDesc() outer loop!\n");
+            }
+            return;
+        }
         // Get the DriverName value
         len = sizeof(buf) / sizeof(buf[0]);
         cr = CM_Get_DevNode_Registry_Property(devInst,
@@ -611,48 +647,63 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
                                               0);
 
         // If the DriverName value matches, return the DeviceDescription
-        if (cr == CR_SUCCESS && _tcsicmp(DriverName, buf) == 0)
+        if (cr == CR_SUCCESS)
         {
-            len = sizeof(buf) / sizeof(buf[0]);
-
-            cr = CM_Get_DevNode_Registry_PropertyW(devInst,
-                                                   CM_DRP_DEVICEDESC,
-                                                   NULL,
-                                                   buf,
-                                                   &len,
-                                                   0);
-
-
-            if (cr == CR_SUCCESS)
+            if (_tcsicmp(DriverName, buf) == 0)
             {
-                if (enumType == ENUMERATE_USBPCAPCMD)
+                len = sizeof(buf) / sizeof(buf[0]);
+
+                cr = CM_Get_DevNode_Registry_PropertyW(devInst,
+                                                       CM_DRP_DEVICEDESC,
+                                                       NULL,
+                                                       buf,
+                                                       &len,
+                                                       0);
+
+
+                if (cr == CR_SUCCESS)
                 {
-                    print_indent(Level);
-                    printf("[Port %d] ", Index);
-                    wide_print((PWSTR)buf);
-                    printf("\n");
-                }
-                else if (enumType == ENUMERATE_EXTCAP)
-                {
-                    PTSTR str = WideStrToUTF8((LPCWSTR)buf);
-                    printf("value {arg=%d}{value=%d}{display=[%d] %s}{enabled=true}",
-                           EXTCAP_ARGNUM_MULTICHECK,
-                           deviceAddress, deviceAddress, str);
-                    if (parentAddress != 0)
+                    if (enumType == ENUMERATE_USBPCAPCMD)
                     {
-                        printf("{parent=%d}", parentAddress);
+                        print_indent(Level);
+                        printf("[Port %d] ", Index);
+                        wide_print((PWSTR)buf);
+                        printf("\n");
                     }
-                    printf("\n");
-                    GlobalFree(str);
+                    else if (enumType == ENUMERATE_EXTCAP)
+                    {
+                        PTSTR str = WideStrToUTF8((LPCWSTR)buf);
+                        printf("value {arg=%d}{value=%d}{display=[%d] %s}{enabled=true}",
+                               EXTCAP_ARGNUM_MULTICHECK,
+                               deviceAddress, deviceAddress, str);
+                        if (parentAddress != 0)
+                        {
+                            printf("{parent=%d}", parentAddress);
+                        }
+                        printf("\n");
+                        GlobalFree(str);
+                    }
+
+                    if (PrintAllChildren)
+                    {
+                        PrintDevinstChildren(devInst, Level, deviceAddress, enumType);
+                    }
                 }
 
-                if (PrintAllChildren)
-                {
-                    PrintDevinstChildren(devInst, Level, deviceAddress, enumType);
-                }
+                // Nothing left to do
+                return;
             }
-
-            // Nothing left to do
+        }
+        else if (cr == CR_NO_SUCH_VALUE)
+        {
+            // No Driver name, it's ok
+        }
+        else
+        {
+            if (enumType != ENUMERATE_EXTCAP)
+            {
+                fprintf(stderr, "Failed to get CM_DRP_DRIVER: 0x%08X\n", cr);
+            }
             return;
         }
 
@@ -669,8 +720,18 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
         // there are no more siblings, go back up until there is a sibling.
         // If we can't go up any further, we're back at the root and we're
         // done.
+        sanityInner = 0;
         for (;;)
         {
+            if ((++sanityInner) > LOOP_SANITY_LIMIT)
+            {
+                if (enumType != ENUMERATE_EXTCAP)
+                {
+                    fprintf(stderr, "Sanity check failed in PrintDeviceDesc() inner loop!\n");
+                }
+                return;
+            }
+
             cr = CM_Get_Sibling(&devInstNext, devInst, 0);
 
             if (cr == CR_SUCCESS)
@@ -678,24 +739,35 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
                 devInst = devInstNext;
                 break;
             }
-
-            cr = CM_Get_Parent(&devInstNext, devInst, 0);
-
-            if (cr == CR_SUCCESS)
+            else if (cr == CR_NO_SUCH_DEVNODE)
             {
-                devInst = devInstNext;
+                // Device doesn't have siblings, go up and try again
+                cr = CM_Get_Parent(&devInstNext, devInst, 0);
+
+                if (cr == CR_SUCCESS)
+                {
+                    devInst = devInstNext;
+                }
+                else
+                {
+                    walkDone = 1;
+                    break;
+                }
             }
             else
             {
-                walkDone = 1;
-                break;
+                if (enumType != ENUMERATE_EXTCAP)
+                {
+                    fprintf(stderr, "CM_Get_Sibling() returned 0x%08X\n", cr);
+                }
+                return;
             }
         }
     }
 }
 
 static VOID
-EnumerateHubPorts(HANDLE hHubDevice, ULONG NumPorts, ULONG level,
+EnumerateHubPorts(HANDLE hHubDevice, UCHAR NumPorts, ULONG level,
                   USHORT hubAddress, EnumerationType enumType)
 {
     ULONG       index;
