@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013 Tomasz Moń <desowin@gmail.com>
+ * Copyright (c) 2013-2018 Tomasz Moń <desowin@gmail.com>
  *
  * Redistribution and use in source and binary forms, with or without
  * modification, are permitted provided that the following conditions
@@ -36,7 +36,7 @@
 #include "filters.h"
 #include "thread.h"
 #include "enum.h"
-#include "gopt.h"
+#include "getopt.h"
 #include "roothubs.h"
 
 #define INPUT_BUFFER_SIZE 1024
@@ -691,6 +691,7 @@ int cmd_interactive(struct thread_data *data)
         }
     } while (finished == FALSE);
 
+    filters_free();
     return 0;
 }
 
@@ -796,6 +797,11 @@ static void start_capture(struct thread_data *data)
         fprintf(stderr, "Selected capture options result in empty capture.\n");
         return;
     }
+
+    data->exit_event = CreateEvent(NULL, /* Handle cannot be inherited */
+                                   TRUE, /* Manual Reset */
+                                   FALSE, /* Default to not signalled */
+                                   NULL);
 
     if (IsElevated() == TRUE)
     {
@@ -1041,7 +1047,43 @@ static void start_capture(struct thread_data *data)
     }
 }
 
-int print_extcap_options(const char *device)
+static void print_extcap_version(void)
+{
+    /* TODO: do not hardcode the version here. */
+    printf("extcap {version=1.2.0.4}{help=http://desowin.org/usbpcap/}\n");
+}
+
+static void print_extcap_interfaces(void)
+{
+    int i = 0;
+    filters_initialize();
+
+    while (usbpcapFilters[i] != NULL)
+    {
+        char *tmp = strrchr(usbpcapFilters[i]->device, '\\');
+        if (tmp == NULL)
+        {
+            tmp = usbpcapFilters[i]->device;
+        }
+        else
+        {
+            tmp++;
+        }
+
+        printf("interface {value=%s}{display=%s}\n",
+               usbpcapFilters[i]->device, tmp);
+        i++;
+    }
+
+    filters_free();
+}
+
+static void print_extcap_dlts(void)
+{
+    printf("dlt {number=249}{name=USBPCAP}{display=USBPcap}\n");
+}
+
+static int print_extcap_options(const char *device)
 {
     if (device == NULL)
     {
@@ -1072,94 +1114,62 @@ int print_extcap_options(const char *device)
     return 0;
 }
 
-int cmd_extcap(void *options, struct thread_data *data)
+static int run_as_extcap = 0;
+static int do_extcap_version = 0;
+static int do_extcap_interfaces = 0;
+static int do_extcap_dlts = 0;
+static int do_extcap_config = 0;
+static int do_extcap_capture = 0;
+static const char *wireshark_version = NULL;
+static const char *extcap_interface = NULL;
+static const char *extcap_fifo = NULL;
+
+int cmd_extcap(struct thread_data *data)
 {
-    const char *extcap_interface = NULL;
+    int ret = -1;
 
-    /* --extcap-version */
-    /* Ignored for now */
-
-    /* --extcap-interfaces */
-    if (gopt(options, '1'))
+    if (do_extcap_version)
     {
-        int i = 0;
-        filters_initialize();
-
-        while (usbpcapFilters[i] != NULL)
-        {
-            char *tmp = strrchr(usbpcapFilters[i]->device, '\\');
-            if (tmp == NULL)
-            {
-                tmp = usbpcapFilters[i]->device;
-            }
-            else
-            {
-                tmp++;
-            }
-
-            printf("interface {value=%s}{display=%s}\n",
-                    usbpcapFilters[i]->device, tmp);
-            i++;
-        }
-
-        filters_free();
-        return 0;
+        print_extcap_version();
+        ret = 0;
     }
 
-    /* --extcap-interface */
-    gopt_arg(options, '2', &extcap_interface);
-
-    /* --extcap-dlts */
-    if (gopt(options, '3'))
+    if (do_extcap_interfaces)
     {
-        printf("dlt {number=249}{name=USBPCAP}{display=USBPcap}\n");
-        return 0;
+        print_extcap_interfaces();
+        ret = 0;
     }
 
-    /* --extcap-config */
-    if (gopt(options, '4'))
+    if (do_extcap_dlts)
     {
-        return print_extcap_options(extcap_interface);
+        print_extcap_dlts();
+        ret = 0;
+    }
+
+    if (do_extcap_config)
+    {
+        ret = print_extcap_options(extcap_interface);
     }
 
     /* --capture */
-    if (gopt(options, '5'))
+    if (do_extcap_capture)
     {
-        const char *tmp;
-        const char *fifo = NULL;
-
-        /* --fifo */
-        gopt_arg(options, '6', &fifo);
-        if ((fifo == NULL) || (extcap_interface == NULL))
+        if ((extcap_fifo == NULL) || (extcap_interface == NULL))
         {
             /* No fifo nor interface to capture from. */
             return -1;
         }
 
-
-        if (gopt_arg(options, 's', &tmp))
+        if (data->device != NULL)
         {
-            data->snaplen = atol(tmp);
-            if (data->snaplen == 0)
-            {
-                /* Invalid snapshot length! */
-                return -1;
-            }
+            free(data->device);
         }
-
-        if (gopt_arg(options, 'b', &tmp))
+        data->device = _strdup(extcap_interface);
+        if (data->filename != NULL)
         {
-            data->bufferlen = atol(tmp);
-            /* Minimum buffer size if 4 KiB, maximum 128 MiB */
-            if (data->bufferlen < 4096 || data->bufferlen > 134217728)
-            {
-                /* Invalid buffer length! Valid range <4096,134217728>. */
-                return -1;
-            }
+            free(data->filename);
         }
-
-        data->device = (char*)extcap_interface;
-        data->filename = (char*)fifo;
+        data->filename = _strdup(extcap_fifo);
         data->process = TRUE;
 
         data->read_handle = INVALID_HANDLE_VALUE;
@@ -1169,7 +1179,7 @@ int cmd_extcap(void *options, struct thread_data *data)
         return 0;
     }
 
-    return -1;
+    return ret;
 }
 
 BOOLEAN IsHandleRedirected(DWORD handle)
@@ -1220,241 +1230,219 @@ static void attach_parent_console()
     }
 }
 
+static void print_help(void)
+{
+    printf("Usage: USBPcapCMD.exe [options]\n"
+           "  -h, -?, --help\n"
+           "    Prints this help.\n"
+           "  -d <device>, --device <device>\n"
+           "    USBPcap control device to open. Example: -d \\\\.\\USBPcap1.\n"
+           "  -o <file>, --output <file>\n"
+           "    Output .pcap file name.\n"
+           "  -s <len>, --snaplen <len>\n"
+           "    Sets snapshot length.\n"
+           "  -b <len>, --bufferlen <len>\n"
+           "    Sets internal capture buffer length. Valid range <4096,134217728>.\n"
+           "  -A, --capture-from-all-devices\n"
+           "    Captures data from all devices connected to selected Root Hub.\n"
+           "  --devices <list>\n"
+           "    Captures data only from devices with addresses present in list.\n"
+           "    List is comma separated list of values. Example --devices 1,2,3.\n"
+           "  -I,  --init-non-standard-hwids\n"
+           "    Initializes NonStandardHWIDs registry key used by USBPcapDriver.\n"
+           "    This registry key is needed for USB 3.0 capture.\n");
+}
+
+/* Commandline arguments without short option */
+#define ARG_DEVICES                    900
+#define ARG_CAPTURE_FROM_NEW_DEVICES   901
+#define ARG_EXTCAP_VERSION            1000
+#define ARG_EXTCAP_INTERFACES         1001
+#define ARG_EXTCAP_INTERFACE          1002
+#define ARG_EXTCAP_DLTS               1003
+#define ARG_EXTCAP_CONFIG             1004
+#define ARG_EXTCAP_CAPTURE            1005
+#define ARG_EXTCAP_FIFO               1006
+
 #if _MSC_VER >= 1700
 int __cdecl usbpcapcmd_main(int argc, CHAR **argv)
 #else
 int __cdecl main(int argc, CHAR **argv)
 #endif
 {
-    void *options;
-    const char *tmp;
+    int ret = -1;
     struct thread_data data;
-    BOOL interactive;
-
-    /* Too bad Microsoft compiler does not support C99...
-    options = gopt_sort(&argc, argv, gopt_start(
-        gopt_option('h', 0, gopt_shorts('h, '?'), gopt_longs("help")),
-        gopt_option('d', GOPT_ARG, gopt_shorts('d'), gopt_longs("device")),
-        gopt_option('o', GOPT_ARG, gopt_shorts('o'), gopt_longs("output")),
-        gopt_option('s', GOPT_ARG, gopt_shorts('s'), gopt_longs("snaplen")),
-        gopt_option('b', GOPT_ARG, gopt_shorts('b'), gopt_longs("bufferlen")),
-        gopt_option('I', 0, gopt_shorts('I'), gopt_longs("init-non-standard-hwids"))));
-    */
-
-    const char *const h_long[] = {"help", NULL};
-    const char *const d_long[] = {"device", NULL};
-    const char *const o_long[] = {"output", NULL};
-    const char *const s_long[] = {"snaplen", NULL};
-    const char *const b_long[] = {"bufferlen", NULL};
-    const char *const I_long[] = {"init-non-standard-hwids", NULL};
-
-    /* Extcap interface. */
-    const char *const _0_long[] = {"extcap-version", NULL};
-    const char *const _1_long[] = {"extcap-interfaces", NULL};
-    const char *const _2_long[] = {"extcap-interface", NULL};
-    const char *const _3_long[] = {"extcap-dlts", NULL};
-    const char *const _4_long[] = {"extcap-config", NULL};
-    const char *const _5_long[] = {"capture", NULL};
-    const char *const _6_long[] = {"fifo", NULL};
-
-    const char *const _7_long[] = {"devices", NULL};
-    const char *const _8_long[] = {"capture-from-all-devices", NULL};
-    const char *const _9_long[] = {"capture-from-new-devices", NULL};
-    opt_spec_t opt_specs[] = {
-        {'h', 0, "h?", h_long},
-        {'d', GOPT_ARG, "d", d_long},
-        {'o', GOPT_ARG, "o", o_long},
-        {'s', GOPT_ARG, "s", s_long},
-        {'b', GOPT_ARG, "b", b_long},
-        {'I', 0, "I", I_long},
-
+    static struct option long_options[] =
+    {
+        {"help", no_argument, 0, 'h'},
+        {"device", required_argument, 0, 'd'},
+        {"output", required_argument, 0, 'o'},
+        {"snaplen", required_argument, 0, 's'},
+        {"bufferlen", required_argument, 0, 'b'},
+        {"init-non-standard-hwids", no_argument, 0, 'I'},
+        /* Capture options. */
+        {"devices", required_argument, 0, ARG_DEVICES},
+        {"capture-from-all-devices", no_argument, 0, 'A'},
+        {"capture-from-new-devices", no_argument, 0, ARG_CAPTURE_FROM_NEW_DEVICES},
         /* Extcap interface. Please note that there are no short
          * options for these and the numbers are just gopt keys.
          */
-        {'0', GOPT_ARG, "", _0_long},
-        {'1', 0, "", _1_long},
-        {'2', GOPT_ARG, "", _2_long},
-        {'3', 0, "", _3_long},
-        {'4', 0, "", _4_long},
-        {'5', 0, "", _5_long},
-        {'6', GOPT_ARG, "", _6_long},
-
-        {'7', GOPT_ARG, "", _7_long},
-        {'8', 0, "A", _8_long},
-        {'9', 0, "", _9_long},
-        {0},
+        {"extcap-version", optional_argument, 0, ARG_EXTCAP_VERSION},
+        {"extcap-interfaces", no_argument, &do_extcap_interfaces, ARG_EXTCAP_INTERFACES},
+        {"extcap-interface", required_argument, 0, ARG_EXTCAP_INTERFACE},
+        {"extcap-dlts", no_argument, &do_extcap_dlts, ARG_EXTCAP_DLTS},
+        {"extcap-config", no_argument, &do_extcap_config, ARG_EXTCAP_CONFIG},
+        {"capture", no_argument, &do_extcap_capture, ARG_EXTCAP_CAPTURE},
+        {"fifo", required_argument, 0, ARG_EXTCAP_FIFO},
+        {0, 0, 0, 0}
     };
+    int option_index = 0;
+    int c;
 
     attach_parent_console();
 
-    options = gopt_sort(&argc, argv, (const void*)opt_specs);
-
     data.filename = NULL;
     data.device = NULL;
-    if (!gopt_arg(options, '7', &data.address_list))
-    {
-        data.address_list = NULL;
-    }
-    data.capture_all = gopt(options, '8') ? TRUE : FALSE;
-    data.capture_new = gopt(options, '9') ? TRUE : FALSE;
+    data.address_list = NULL;
+    data.capture_all = FALSE;
+    data.capture_new = FALSE;
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
     data.worker_process_thread = INVALID_HANDLE_VALUE;
-    data.exit_event = CreateEvent(NULL, /* Handle cannot be inherited */
-                                  TRUE, /* Manual Reset */
-                                  FALSE, /* Default to not signalled */
-                                  NULL);
+    data.exit_event = INVALID_HANDLE_VALUE;
 
-    if (gopt(options, 'h'))
+    while (-1 != (c = getopt_long(argc, argv, "hd:o:s:b:IA", long_options, &option_index)))
     {
-        printf("Usage: USBPcapCMD.exe [options]\n"
-               "  -h, -?, --help\n"
-               "    Prints this help.\n"
-               "  -d <device>, --device <device>\n"
-               "    USBPcap control device to open. Example: -d \\\\.\\USBPcap1.\n"
-               "  -o <file>, --output <file>\n"
-               "    Output .pcap file name.\n"
-               "  -s <len>, --snaplen <len>\n"
-               "    Sets snapshot length.\n"
-               "  -b <len>, --bufferlen <len>\n"
-               "    Sets internal capture buffer length. Valid range <4096,134217728>.\n"
-               "  -A, --capture-from-all-devices\n"
-               "    Captures data from all devices connected to selected Root Hub.\n"
-               "  --devices <list>\n"
-               "    Captures data only from devices with addresses present in list.\n"
-               "    List is comma separated list of values. Example --devices 1,2,3.\n"
-               "  -I,  --init-non-standard-hwids\n"
-               "    Initializes NonStandardHWIDs registry key used by USBPcapDriver.\n"
-               "    This registry key is needed for USB 3.0 capture.\n");
-        return 0;
+        switch (c)
+        {
+            case 0:
+                /* getopt_long has set the flag. */
+                break;
+            case 'h': /* --help */
+                print_help();
+                return 0;
+            case 'd': /* --device */
+#pragma warning(push)
+#pragma warning(disable:28193)
+                data.device = _strdup(optarg);
+#pragma warning(pop)
+                break;
+            case 'o': /* --output */
+#pragma warning(push)
+#pragma warning(disable:28193)
+                data.filename = _strdup(optarg);
+#pragma warning(pop)
+                break;
+            case 's': /* --snaplen */
+                data.snaplen = atol(optarg);
+                if (data.snaplen == 0)
+                {
+                    fprintf(stderr, "Invalid snapshot length!\n");
+                    return -1;
+                }
+                break;
+            case 'b': /* --bufferlen */
+                data.bufferlen = atol(optarg);
+                /* Minimum buffer size if 4 KiB, maximum 128 MiB */
+                if (data.bufferlen < 4096 || data.bufferlen > 134217728)
+                {
+                    fprintf(stderr, "Invalid buffer length! "
+                                    "Valid range <4096,134217728>.\n");
+                    return -1;
+                }
+                break;
+            case 'I': /* --init-non-standard-hwids */
+                init_non_standard_roothub_hwid();
+                return 0;
+            case ARG_DEVICES:
+                data.address_list = optarg;
+                break;
+            case 'A': /* --capture-from-all-devices */
+                data.capture_all = TRUE;
+                break;
+            case ARG_CAPTURE_FROM_NEW_DEVICES:
+                data.capture_new = TRUE;
+                break;
+            case ARG_EXTCAP_VERSION:
+                do_extcap_version = 1;
+                wireshark_version = optarg;
+                break;
+            case ARG_EXTCAP_INTERFACE:
+                extcap_interface = optarg;
+                break;
+            case ARG_EXTCAP_FIFO:
+                run_as_extcap = 1;
+                extcap_fifo = optarg;
+                break;
+
+            case ':':
+            case '?':
+                fprintf(stderr, "Try 'USBPcapCMD.exe --help' for more information.\n");
+                return -1;
+
+            default:
+                printf("getopt_long() returned character code 0x%X. Please report.\n", c);
+                return -1;
+        }
     }
 
     /* Handle extcap options separately from standard USBPcapCMD options. */
-    if (gopt(options, '0') || gopt(options, '1') ||
-        gopt(options, '2') || gopt(options, '2') ||
-        gopt(options, '4') || gopt(options, '3') ||
-        gopt(options, '6'))
+    if (run_as_extcap || do_extcap_version || do_extcap_interfaces || do_extcap_dlts || do_extcap_config || do_extcap_capture)
     {
-        /* Make sure we don't go any further. */
-        int ret = cmd_extcap(options, &data);
-        if (data.worker_process_thread != INVALID_HANDLE_VALUE)
-        {
-            CloseHandle(data.worker_process_thread);
-        }
-        if (data.job_handle != INVALID_HANDLE_VALUE)
-        {
-            CloseHandle(data.job_handle);
-        }
-        if (data.exit_event != INVALID_HANDLE_VALUE)
-        {
-            CloseHandle(data.exit_event);
-        }
-        return ret;
-    }
-
-    if (gopt(options, 'I'))
-    {
-        init_non_standard_roothub_hwid();
-        return 0;
-    }
-
-
-    if (gopt_arg(options, 'd', &tmp))
-    {
-#pragma warning(push)
-#pragma warning(disable:28193)
-        data.device = _strdup(tmp);
-#pragma warning(pop)
-    }
-
-    if (gopt_arg(options, 'o', &tmp))
-    {
-#pragma warning(push)
-#pragma warning(disable:28193)
-        data.filename = _strdup(tmp);
-#pragma warning(pop)
-    }
-
-    if (gopt_arg(options, 's', &tmp))
-    {
-        data.snaplen = atol(tmp);
-        if (data.snaplen == 0)
-        {
-            fprintf(stderr, "Invalid snapshot length!\n");
-            return -1;
-        }
-    }
-
-    if (gopt_arg(options, 'b', &tmp))
-    {
-        data.bufferlen = atol(tmp);
-        /* Minimum buffer size if 4 KiB, maximum 128 MiB */
-        if (data.bufferlen < 4096 || data.bufferlen > 134217728)
-        {
-            fprintf(stderr, "Invalid buffer length! "
-                            "Valid range <4096,134217728>.\n");
-            return -1;
-        }
-    }
-
-    if (data.filename != NULL && data.device != NULL)
-    {
-        interactive = FALSE;
+        ret = cmd_extcap(&data);
     }
     else
     {
-        interactive = TRUE;
-        if (data.filename != NULL)
+        ret = 0;
+
+        if ((data.filename == NULL) || (data.device == NULL))
         {
-            free(data.filename);
-            data.filename = NULL;
+            if (data.filename != NULL)
+            {
+                free(data.filename);
+                data.filename = NULL;
+            }
+
+            if (data.device != NULL)
+            {
+                free(data.device);
+                data.device = NULL;
+            }
+
+            ret = cmd_interactive(&data);
         }
 
-        if (data.device != NULL)
+        if (ret == 0)
         {
-            free(data.device);
-            data.device = NULL;
+            data.process = TRUE;
+            start_capture(&data);
         }
-
-        if (cmd_interactive(&data) < 0)
-        {
-            return -1;
-        }
-
-        filters_free();
     }
 
-    data.process = TRUE;
-
-    start_capture(&data);
-
+    /* Clean up */
     if (data.device != NULL)
     {
         free(data.device);
     }
-
     if (data.filename != NULL)
     {
         free(data.filename);
     }
-
     if (data.worker_process_thread != INVALID_HANDLE_VALUE)
     {
         CloseHandle(data.worker_process_thread);
     }
-
     if (data.job_handle != INVALID_HANDLE_VALUE)
     {
         CloseHandle(data.job_handle);
     }
-
     if (data.exit_event != INVALID_HANDLE_VALUE)
     {
         CloseHandle(data.exit_event);
     }
 
-    return 0;
+    return ret;
 }
 
 #if _MSC_VER >= 1700
