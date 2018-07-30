@@ -1231,8 +1231,12 @@ BOOLEAN IsHandleRedirected(DWORD handle)
 
 static void attach_parent_console()
 {
+    HANDLE outHandle, errHandle;
     BOOL outRedirected, errRedirected;
     int outType, errType;
+
+    outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
+    errHandle = GetStdHandle(STD_ERROR_HANDLE);
 
     outRedirected = IsHandleRedirected(STD_OUTPUT_HANDLE);
     errRedirected = IsHandleRedirected(STD_ERROR_HANDLE);
@@ -1256,10 +1260,24 @@ static void attach_parent_console()
     {
         freopen("CONOUT$", "w", stdout);
     }
+    else if (GetStdHandle(STD_OUTPUT_HANDLE) != outHandle)
+    {
+        /* Attach Console changed STD_OUTPUT_HANDLE even though it is redirected.
+         * Restore the redirected handle.
+         */
+        SetStdHandle(STD_OUTPUT_HANDLE, outHandle);
+    }
 
     if (errRedirected == FALSE)
     {
         freopen("CONOUT$", "w", stderr);
+    }
+    else if (GetStdHandle(STD_ERROR_HANDLE) != errHandle)
+    {
+        /* Attach Console changed STD_ERROR_HANDLE even though it is redirected.
+         * Restore the redirected handle.
+         */
+        SetStdHandle(STD_ERROR_HANDLE, errHandle);
     }
 }
 
