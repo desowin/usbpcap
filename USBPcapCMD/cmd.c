@@ -56,6 +56,39 @@ static BOOL IsElevated()
         {
             fRet = Elevation.TokenIsElevated;
         }
+        else
+        {
+            DWORD err = GetLastError();
+            if (err == ERROR_INVALID_PARAMETER)
+            {
+                /* Running on Windows XP.
+                 * Check if executed as administrator by reading Local Service key.
+                 */
+                HKEY key;
+                if (ERROR_SUCCESS == RegOpenKey(HKEY_USERS, "S-1-5-19", &key))
+                {
+                    fRet = TRUE;
+                }
+                else
+                {
+                    /* If we were executed with SW_HIDE then the runas window won't be shown.
+                     * In such case pretend here that we are running as administrator so
+                     * the process will fail (and not simply be waiting indefinitely
+                     * without giving any clue).
+                     */
+                    STARTUPINFO info;
+                    GetStartupInfo(&info);
+                    if (info.wShowWindow == SW_HIDE)
+                    {
+                        fRet = TRUE;
+                    }
+                }
+            }
+            else
+            {
+                fprintf(stderr, "GetTokenInformation failed with code %d\n", err);
+            }
+        }
     }
 
     if (hToken)
