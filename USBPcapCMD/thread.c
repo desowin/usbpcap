@@ -52,11 +52,11 @@ HANDLE create_filter_read_handle(struct thread_data *data)
     }
 
     filter_handle = CreateFileA(data->device,
-                                GENERIC_READ|GENERIC_WRITE|FILE_FLAG_OVERLAPPED,
+                                GENERIC_READ|GENERIC_WRITE,
                                 0,
                                 0,
                                 OPEN_EXISTING,
-                                0,
+                                FILE_FLAG_OVERLAPPED,
                                 0);
 
     if (filter_handle == INVALID_HANDLE_VALUE)
@@ -137,8 +137,14 @@ DWORD WINAPI read_thread(LPVOID param)
 {
     struct thread_data* data = (struct thread_data*)param;
     unsigned char* buffer;
+    DWORD dummy_read;
+    unsigned char dummy_buf;
     OVERLAPPED read_overlapped;
+    OVERLAPPED write_overlapped;
     OVERLAPPED write_handle_read_overlapped; /* Used to detect broken pipe. */
+    DWORD read;
+    HANDLE table[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+    int table_count = 0;
 
     buffer = malloc(data->bufferlen);
     if (buffer == NULL)
@@ -161,63 +167,126 @@ DWORD WINAPI read_thread(LPVOID param)
     }
 
     memset(&read_overlapped, 0, sizeof(read_overlapped));
+    memset(&write_overlapped, 0, sizeof(write_overlapped));
     memset(&write_handle_read_overlapped, 0, sizeof(write_handle_read_overlapped));
     read_overlapped.hEvent = CreateEvent(NULL,
                                          TRUE /* Manual Reset */,
                                          FALSE /* Default non signaled */,
                                          NULL /* No name */);
+    write_overlapped.hEvent = CreateEvent(NULL,
+                                          TRUE /* Manual Reset */,
+                                          FALSE /* Default non signaled */,
+                                          NULL /* No name */);
     write_handle_read_overlapped.hEvent = CreateEvent(NULL,
                                                       TRUE /* Manual Reset */,
                                                       FALSE /* Default non signaled */,
                                                       NULL /* No name */);
+    table[table_count] = read_overlapped.hEvent;
+    table_count++;
+    table[table_count] = write_overlapped.hEvent;
+    table_count++;
+    if (GetFileType(data->write_handle) == FILE_TYPE_PIPE)
+    {
+        /* Setup dummy reads from write handle so we can detect broken pipe
+         * even ifthere isn't any data read from read handle.
+         */
+        table[table_count] = write_handle_read_overlapped.hEvent;
+        table_count++;
+        ReadFile(data->write_handle, &dummy_buf, sizeof(dummy_buf), NULL, &write_handle_read_overlapped);
+    }
+    if (data->exit_event != INVALID_HANDLE_VALUE)
+    {
+        table[table_count] = data->exit_event;
+        table_count++;
+    }
+
+    ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, NULL, &read_overlapped);
+
     for (; data->process == TRUE;)
     {
-        const HANDLE table[] = {read_overlapped.hEvent, write_handle_read_overlapped.hEvent};
-        DWORD dummy_read;
-        unsigned char dummy_buf;
-        DWORD read;
+        DWORD dw;
         DWORD written;
-        DWORD i;
 
-        ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, &read, &read_overlapped);
-        ReadFile(data->write_handle, &dummy_buf, sizeof(dummy_buf), &dummy_read, &write_handle_read_overlapped);
-
-        i = WaitForMultipleObjects(sizeof(table)/sizeof(table[0]),
-                                   table,
-                                   FALSE,
-                                   INFINITE);
-
-        if (i == WAIT_OBJECT_0)
+        dw = WaitForMultipleObjects(table_count,
+                                    table,
+                                    FALSE,
+                                    INFINITE);
+#pragma warning(default : 4296)
+        if ((dw >= WAIT_OBJECT_0) && dw < (WAIT_OBJECT_0 + table_count))
         {
-            /* Standard read */
-            GetOverlappedResult(data->read_handle, &read_overlapped, &read, TRUE);
-            ResetEvent(read_overlapped.hEvent);
-            if (!WriteFile(data->write_handle, buffer, read, &written, NULL))
+            int i = dw - WAIT_OBJECT_0;
+            if (table[i] == read_overlapped.hEvent)
             {
-                /* Failed to write to output. Quit. */
+                GetOverlappedResult(data->read_handle, &read_overlapped, &read, TRUE);
+                ResetEvent(read_overlapped.hEvent);
+                /* Write data to the end of the file. */
+                write_overlapped.Offset = 0xFFFFFFFF;
+                write_overlapped.OffsetHigh = 0xFFFFFFFF;
+                if (!WriteFile(data->write_handle, buffer, read, NULL, &write_overlapped))
+                {
+                    DWORD err = GetLastError();
+                    if (err == ERROR_IO_PENDING)
+                    {
+                        if (!GetOverlappedResult(data->write_handle, &write_overlapped, &written, TRUE))
+                        {
+                            fprintf(stderr, "GetOverlappedResult() on write handle failed: %d\n", GetLastError());
+                        }
+                        else if (written != read)
+                        {
+                            fprintf(stderr, "Wrote %d bytes instead of %d. Stopping capture.\n", written, read);
+                            data->process = FALSE;
+                        }
+                    }
+                    else
+                    {
+                        /* Failed to write to output. Quit. */
+                        fprintf(stderr, "Write failed (%d). Stopping capture.\n", GetLastError());
+                        data->process = FALSE;
+                    }
+                }
+                FlushFileBuffers(data->write_handle);
+                /* Start new read. */
+                ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, &read, &read_overlapped);
+            }
+            else if (table[i] == write_overlapped.hEvent)
+            {
+                ResetEvent(write_overlapped.hEvent);
+            }
+            else if (table[i] == write_handle_read_overlapped.hEvent)
+            {
+                DWORD err;
+                /* Most likely broken pipe detected */
+                GetOverlappedResult(data->write_handle, &write_handle_read_overlapped, &dummy_read, TRUE);
+                err = GetLastError();
+                ResetEvent(write_handle_read_overlapped.hEvent);
+                if (err == ERROR_BROKEN_PIPE)
+                {
+                    /* We should quit. */
+                    data->process = FALSE;
+                }
+                else
+                {
+                    /* Don't care about result. Start read again. */
+                    ReadFile(data->write_handle, &dummy_buf, sizeof(dummy_buf), NULL, &write_handle_read_overlapped);
+                }
+            }
+            else if (table[i] == data->exit_event)
+            {
+                /* We should quit as exit_event is set. */
                 data->process = FALSE;
             }
-            FlushFileBuffers(data->write_handle);
         }
-        else if (i == (WAIT_OBJECT_0 + 1))
+        else if (dw == WAIT_FAILED)
         {
-            /* Most likely broken pipe detected */
-            GetOverlappedResult(data->write_handle, &write_handle_read_overlapped, &dummy_read, TRUE);
-            if (GetLastError() == ERROR_BROKEN_PIPE)
-            {
-                /* We should quit. */
-                data->process = FALSE;
-            }
-            else
-            {
-                /* Don't care about result. Start read again. */
-                ReadFile(data->write_handle, &dummy_buf, sizeof(dummy_buf), &dummy_read, &write_handle_read_overlapped);
-            }
-            ResetEvent(write_handle_read_overlapped.hEvent);
+            fprintf(stderr, "WaitForMultipleObjects failed in read_thread(): %d", GetLastError());
+            break;
         }
     }
 
+    CancelIo(data->read_handle);
+    CancelIo(data->write_handle);
     CloseHandle(read_overlapped.hEvent);
+    CloseHandle(write_overlapped.hEvent);
     CloseHandle(write_handle_read_overlapped.hEvent);
 
 finish:
@@ -226,7 +295,10 @@ finish:
         free(buffer);
     }
 
-    /* Notify main thread that we are done. */
+    /* Notify main thread that we are done.
+     * If we are exiting due to exit_event being set by another thread,
+     * setting the exit_event here isn't a problem (it is already set).
+     */
     if (data->exit_event != INVALID_HANDLE_VALUE)
     {
         SetEvent(data->exit_event);

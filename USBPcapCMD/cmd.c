@@ -337,7 +337,7 @@ static BOOL generate_worker_command_line(struct thread_data *data,
                                          * it should terminate (read from this pipe in elevated worker will
                                          * result in ERROR_BROKEN_PIPE).
                                          */
-                                        PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE,
+                                        PIPE_ACCESS_DUPLEX | FILE_FLAG_FIRST_PIPE_INSTANCE | FILE_FLAG_OVERLAPPED,
                                         PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT,
                                         2 /* Max instances of pipe */,
                                         data->bufferlen, data->bufferlen,
@@ -850,7 +850,7 @@ static void start_capture(struct thread_data *data)
                                              0,
                                              NULL,
                                              CREATE_NEW,
-                                             FILE_ATTRIBUTE_NORMAL,
+                                             FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED,
                                              NULL);
         }
 
@@ -1041,8 +1041,19 @@ static void start_capture(struct thread_data *data)
     }
 
     wait_for_exit_signal(data, process);
+    data->process = FALSE;
+    if (data->exit_event != INVALID_HANDLE_VALUE)
+    {
+        SetEvent(data->exit_event);
+    }
 
-    /* Closing read and write handles will terminate worker thread/process. */
+    /* If we created worker thread, wait for it to terminate. */
+    if (thread != NULL)
+    {
+        WaitForSingleObject(thread, INFINITE);
+    }
+
+    /* Closing read and write handles will terminate worker process. */
 
     if ((data->read_handle == INVALID_HANDLE_VALUE) &&
         (data->write_handle == INVALID_HANDLE_VALUE))
@@ -1071,12 +1082,6 @@ static void start_capture(struct thread_data *data)
     {
         WaitForSingleObject(process, INFINITE);
         CloseHandle(process);
-    }
-
-    /* If we created worker thread, wait for it to terminate. */
-    if (thread != NULL)
-    {
-        WaitForSingleObject(thread, INFINITE);
     }
 }
 
