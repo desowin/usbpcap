@@ -141,10 +141,14 @@ DWORD WINAPI read_thread(LPVOID param)
     unsigned char dummy_buf;
     OVERLAPPED read_overlapped;
     OVERLAPPED write_overlapped;
+    OVERLAPPED connect_overlapped;
     OVERLAPPED write_handle_read_overlapped; /* Used to detect broken pipe. */
     DWORD read;
-    HANDLE table[4] = {INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE, INVALID_HANDLE_VALUE};
+    DWORD err;
+    HANDLE table[5];
     int table_count = 0;
+
+    memset(&table, 0, sizeof(table));
 
     buffer = malloc(data->bufferlen);
     if (buffer == NULL)
@@ -167,12 +171,17 @@ DWORD WINAPI read_thread(LPVOID param)
     }
 
     memset(&read_overlapped, 0, sizeof(read_overlapped));
+    memset(&connect_overlapped, 0, sizeof(connect_overlapped));
     memset(&write_overlapped, 0, sizeof(write_overlapped));
     memset(&write_handle_read_overlapped, 0, sizeof(write_handle_read_overlapped));
     read_overlapped.hEvent = CreateEvent(NULL,
                                          TRUE /* Manual Reset */,
                                          FALSE /* Default non signaled */,
                                          NULL /* No name */);
+    connect_overlapped.hEvent = CreateEvent(NULL,
+                                            TRUE /* Manual Reset */,
+                                            FALSE /* Default non signaled */,
+                                            NULL /* No name */);
     write_overlapped.hEvent = CreateEvent(NULL,
                                           TRUE /* Manual Reset */,
                                           FALSE /* Default non signaled */,
@@ -200,7 +209,24 @@ DWORD WINAPI read_thread(LPVOID param)
         table_count++;
     }
 
-    ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, NULL, &read_overlapped);
+    if (GetFileType(data->read_handle) == FILE_TYPE_PIPE)
+    {
+        table[table_count] = connect_overlapped.hEvent;
+        table_count++;
+        if (!ConnectNamedPipe(data->read_handle, &connect_overlapped))
+        {
+            err = GetLastError();
+            if ((err != ERROR_IO_PENDING) && (err != ERROR_PIPE_CONNECTED))
+            {
+                fprintf(stderr, "ConnectNamedPipe() failed with code %d\n", err);
+                data->process = FALSE;
+            }
+        }
+    }
+    else
+    {
+        ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, NULL, &read_overlapped);
+    }
 
     for (; data->process == TRUE;)
     {
@@ -224,7 +250,7 @@ DWORD WINAPI read_thread(LPVOID param)
                 write_overlapped.OffsetHigh = 0xFFFFFFFF;
                 if (!WriteFile(data->write_handle, buffer, read, NULL, &write_overlapped))
                 {
-                    DWORD err = GetLastError();
+                    err = GetLastError();
                     if (err == ERROR_IO_PENDING)
                     {
                         if (!GetOverlappedResult(data->write_handle, &write_overlapped, &written, TRUE))
@@ -245,6 +271,7 @@ DWORD WINAPI read_thread(LPVOID param)
                     }
                 }
                 FlushFileBuffers(data->write_handle);
+                ResetEvent(write_overlapped.hEvent);
                 /* Start new read. */
                 ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, &read, &read_overlapped);
             }
@@ -254,7 +281,6 @@ DWORD WINAPI read_thread(LPVOID param)
             }
             else if (table[i] == write_handle_read_overlapped.hEvent)
             {
-                DWORD err;
                 /* Most likely broken pipe detected */
                 GetOverlappedResult(data->write_handle, &write_handle_read_overlapped, &dummy_read, TRUE);
                 err = GetLastError();
@@ -275,6 +301,12 @@ DWORD WINAPI read_thread(LPVOID param)
                 /* We should quit as exit_event is set. */
                 data->process = FALSE;
             }
+            else if (table[i] == connect_overlapped.hEvent)
+            {
+                ResetEvent(connect_overlapped.hEvent);
+                /* Start reading data. */
+                ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, &read, &read_overlapped);
+            }
         }
         else if (dw == WAIT_FAILED)
         {
@@ -286,6 +318,7 @@ DWORD WINAPI read_thread(LPVOID param)
     CancelIo(data->read_handle);
     CancelIo(data->write_handle);
     CloseHandle(read_overlapped.hEvent);
+    CloseHandle(connect_overlapped.hEvent);
     CloseHandle(write_overlapped.hEvent);
     CloseHandle(write_handle_read_overlapped.hEvent);
 

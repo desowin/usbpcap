@@ -1016,7 +1016,7 @@ static void start_capture(struct thread_data *data)
                     thread = CreateThread(NULL, /* default security attributes */
                                           0,    /* use default stack size */
                                           read_thread,
-                                          &data,
+                                          data,
                                           0,    /* use default creation flag */
                                           &thread_id);
                 }
@@ -1366,6 +1366,8 @@ int __cdecl main(int argc, CHAR **argv)
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
     data.worker_process_thread = INVALID_HANDLE_VALUE;
+    data.read_handle = INVALID_HANDLE_VALUE;
+    data.write_handle = INVALID_HANDLE_VALUE;
     data.exit_event = INVALID_HANDLE_VALUE;
 
     while (-1 != (c = getopt_long(argc, argv, "hd:o:s:b:IA", long_options, &option_index)))
