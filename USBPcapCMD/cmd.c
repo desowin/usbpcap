@@ -829,6 +829,7 @@ static void start_capture(struct thread_data *data)
         (data->address_list == NULL))
     {
         fprintf(stderr, "Selected capture options result in empty capture.\n");
+        fprintf(stderr, "Add command-line option -A to capture from all devices.\n");
         return;
     }
 
