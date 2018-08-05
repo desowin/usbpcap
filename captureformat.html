@@ -114,7 +114,7 @@ All transfer-specific headers inherit the USBPCAP_BUFFER_PACKET_HEADER, so first
 </p>
 <h3>USBPCAP_TRANSFER_ISOCHRONOUS</h3>
 <p>
-When function is equal to USBPCAP_TRANSFER_ISOCHRONOUS (0) the header type is USBPCAP_BUFFER_ISOCH_HEADER<br/>
+When transfer is equal to USBPCAP_TRANSFER_ISOCHRONOUS (0) the header type is USBPCAP_BUFFER_ISOCH_HEADER<br/>
 <pre>/* Note about isochronous packets:
  *   packet[x].length, packet[x].status and errorCount are only relevant
  *   when USBPCAP_INFO_PDO_TO_FDO is set
@@ -149,12 +149,12 @@ typedef struct
 
 <h3>USBPCAP_TRANSFER_INTERRUPT</h3>
 <p>
-When function is equal to USBPCAP_TRANSFER_INTERRUPT (1) the header type is USBPCAP_BUFFER_PACKET_HEADER<br/>
+When transfer is equal to USBPCAP_TRANSFER_INTERRUPT (1) the header type is USBPCAP_BUFFER_PACKET_HEADER<br/>
 </p>
 
 <h3>USBPCAP_TRANSFER_CONTROL</h3>
 <p>
-When function is equal to USBPCAP_TRANSFER_CONTROL (2) the header type is USBPCAP_BUFFER_CONTROL_HEADER<br/>
+When transfer is equal to USBPCAP_TRANSFER_CONTROL (2) the header type is USBPCAP_BUFFER_CONTROL_HEADER<br/>
 <pre>#define USBPCAP_CONTROL_STAGE_SETUP   0
 #define USBPCAP_CONTROL_STAGE_DATA    1
 #define USBPCAP_CONTROL_STAGE_STATUS  2
@@ -171,7 +171,7 @@ Where stage determines the control transfer stage.
 
 <h3>USBPCAP_TRANSFER_BULK</h3>
 <p>
-When function is equal to USBPCAP_TRANSFER_BULK (3) the header type is USBPCAP_BUFFER_PACKET_HEADER
+When transfer is equal to USBPCAP_TRANSFER_BULK (3) the header type is USBPCAP_BUFFER_PACKET_HEADER
 </p>
 
 </div>
