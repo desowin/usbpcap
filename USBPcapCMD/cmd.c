@@ -38,6 +38,7 @@
 #include "enum.h"
 #include "getopt.h"
 #include "roothubs.h"
+#include "version.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
@@ -1087,8 +1088,7 @@ static void start_capture(struct thread_data *data)
 
 static void print_extcap_version(void)
 {
-    /* TODO: do not hardcode the version here. */
-    printf("extcap {version=1.2.0.4}{help=http://desowin.org/usbpcap/}\n");
+    printf("extcap {version=" USBPCAPCMD_VERSION_STR "}{help=http://desowin.org/usbpcap/}\n");
 }
 
 static void print_extcap_interfaces(void)
