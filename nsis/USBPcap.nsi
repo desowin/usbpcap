@@ -45,7 +45,7 @@ RequestExecutionLevel admin
   ; That will have written an uninstaller binary for us.  Now we sign it
   ; with your favourite code signing tool.
   !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA1% $%TEMP%\Uninstall.exe' = 0
-  ;!system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA256% $%TEMP%\Uninstall.exe' = 0
+  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA256% $%TEMP%\Uninstall.exe' = 0
 
   ; Good.  Now we can carry on writing the real installer.
 
