@@ -54,7 +54,7 @@ RequestExecutionLevel admin
 
   VIAddVersionKey "ProductName" "USBPcap"
   VIAddVersionKey "ProductVersion" "${VERSION}"
-  VIAddVersionKey "LegalCopyright" "(c) 2013-2017 Tomasz Mon"
+  VIAddVersionKey "LegalCopyright" "(c) 2013-2018 Tomasz Mon"
   VIAddVersionKey "FileDescription" "USBPcap installer"
   VIAddVersionKey "FileVersion" "${VERSION}"
   VIProductVersion "${VERSION}"
@@ -118,7 +118,7 @@ not_installed:
 
 no_removal_pending:
   ${IfNot} ${AtLeastWinXP}
-    MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7 and 8 are supported."
+    MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7, 8 and 10 are supported."
     Quit
   ${EndIf}
 
