@@ -950,12 +950,22 @@ EnumerateHubError:
     }
 }
 
-void enumerate_attached_devices(const char *filter, EnumerationType enumType)
+/**
+ * @brief Gets USB Root Hub symbolic link as string
+ *
+ * @param[in] filter USBPcap filter name, eg. \\.\USBPcap1
+ * @param[out] outBuf Output buffer to store the symlink to
+ * @param[in] outBufSize Size of outBuf, in WCHARs
+ *
+ * @return Number of WCHARs written to outBuf.
+ */
+static DWORD
+get_usbpcap_filter_hub_symlink(const char *filter,
+                               WCHAR *outBuf,
+                               DWORD outBufSize)
 {
     HANDLE filter_handle;
-    WCHAR  outBuf[IOCTL_OUTPUT_BUFFER_SIZE];
-    DWORD  outBufSize = IOCTL_OUTPUT_BUFFER_SIZE;
-    DWORD  bytes_ret;
+    DWORD  bytes_ret = 0;
 
     filter_handle = CreateFileA(filter,
                                 0,
@@ -968,38 +978,45 @@ void enumerate_attached_devices(const char *filter, EnumerationType enumType)
     if (filter_handle == INVALID_HANDLE_VALUE)
     {
         fprintf(stderr, "Couldn't open device - %d\n", GetLastError());
-        return;
+        return 0;
     }
 
-    if (DeviceIoControl(filter_handle,
-                        IOCTL_USBPCAP_GET_HUB_SYMLINK,
-                        NULL,
-                        0,
-                        outBuf,
-                        outBufSize,
-                        &bytes_ret,
-                        0))
+    if (!DeviceIoControl(filter_handle,
+                         IOCTL_USBPCAP_GET_HUB_SYMLINK,
+                         NULL,
+                         0,
+                         outBuf,
+                         outBufSize,
+                         &bytes_ret,
+                         0))
     {
-        if (bytes_ret > 0)
+        bytes_ret = 0;
+    }
+
+    CloseHandle(filter_handle);
+    return bytes_ret;
+}
+
+void enumerate_attached_devices(const char *filter, EnumerationType enumType)
+{
+    WCHAR  outBuf[IOCTL_OUTPUT_BUFFER_SIZE];
+    DWORD  bytes_ret;
+
+    bytes_ret = get_usbpcap_filter_hub_symlink(filter, &outBuf[0], sizeof(outBuf)/sizeof(outBuf[0]));
+    if (bytes_ret > 0)
+    {
+        PTSTR str;
+
+        if (enumType == ENUMERATE_USBPCAPCMD)
         {
-            PTSTR str;
-
-            if (enumType == ENUMERATE_USBPCAPCMD)
-            {
-                printf("  ");
-                wide_print(outBuf);
-                printf("\n");
-            }
-
-            str = WideStrToMultiStr(outBuf);
-            EnumerateHub(str, NULL, 2, enumType);
-            GlobalFree(str);
+            printf("  ");
+            wide_print(outBuf);
+            printf("\n");
         }
-    }
 
-    if (filter_handle != INVALID_HANDLE_VALUE)
-    {
-        CloseHandle(filter_handle);
+        str = WideStrToMultiStr(outBuf);
+        EnumerateHub(str, NULL, 2, enumType);
+        GlobalFree(str);
     }
 }
 
