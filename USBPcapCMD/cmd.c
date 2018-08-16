@@ -746,28 +746,31 @@ static void wait_for_exit_signal(struct thread_data *data, HANDLE process)
     int count = 0;
 
     /* Verify that stdin_handle can be used. */
-    dw = WaitForSingleObject(stdin_handle, 0);
-    if (dw == WAIT_FAILED)
+    if ((stdin_handle != NULL) && (stdin_handle != INVALID_HANDLE_VALUE))
     {
-        stdin_handle = INVALID_HANDLE_VALUE;
+        dw = WaitForSingleObject(stdin_handle, 0);
+        if (dw != WAIT_FAILED)
+        {
+            handle_table[count] = stdin_handle;
+            count++;
+        }
     }
 
-    if (stdin_handle != INVALID_HANDLE_VALUE)
-    {
-        handle_table[count] = stdin_handle;
-        count++;
-    }
-
-    if (data->exit_event != INVALID_HANDLE_VALUE)
+    if ((data->exit_event != NULL) && (data->exit_event != INVALID_HANDLE_VALUE))
     {
         handle_table[count] = data->exit_event;
         count++;
     }
 
-    if (process != INVALID_HANDLE_VALUE)
+    if ((process != NULL) && (process != INVALID_HANDLE_VALUE))
     {
         handle_table[count] = process;
         count++;
+    }
+
+    if (count == 0)
+    {
+        fprintf(stderr, "Nothing to wait for in wait_for_exit_signal().\n");
     }
 
     /* Wait for exit condition. */
@@ -810,7 +813,7 @@ static void wait_for_exit_signal(struct thread_data *data, HANDLE process)
         }
         else if (dw == WAIT_FAILED)
         {
-            fprintf(stderr, "WaitForMultipleObjects failed in wait_for_exit_signal(): %d", GetLastError());
+            fprintf(stderr, "WaitForMultipleObjects failed in wait_for_exit_signal(): %d\n", GetLastError());
             break;
         }
     }
@@ -1237,10 +1240,11 @@ BOOLEAN IsHandleRedirected(DWORD handle)
 
 static void attach_parent_console()
 {
-    HANDLE outHandle, errHandle;
+    HANDLE inHandle, outHandle, errHandle;
     BOOL outRedirected, errRedirected;
     int outType, errType;
 
+    inHandle = GetStdHandle(STD_INPUT_HANDLE);
     outHandle = GetStdHandle(STD_OUTPUT_HANDLE);
     errHandle = GetStdHandle(STD_ERROR_HANDLE);
 
@@ -1259,6 +1263,12 @@ static void attach_parent_console()
     {
         /* Console attach failed. */
         return;
+    }
+
+    if (inHandle != GetStdHandle(STD_INPUT_HANDLE))
+    {
+        /* Restore input handle. */
+        SetStdHandle(STD_INPUT_HANDLE, inHandle);
     }
 
     /* Console attach succeded */
