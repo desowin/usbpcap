@@ -681,18 +681,17 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
                     /* Read from device, return from controller */
                     if (transfer->TransferBuffer)
                     {
+                        /* return packet buffers only if data has been transferred */
                         if (transfer->TransferBufferLength > 0)
                         {
-                            transferLength =
-                                transfer->IsoPacket[transfer->NumberOfPackets - 1].Offset +
-                                transfer->IsoPacket[transfer->NumberOfPackets - 1].Length;
-
-                            /* In practice, the array is always sorted in order of offsets.
-                               However, this is not guaranteed, so we scan for the maximum. */
                             for (i = 0; i < transfer->NumberOfPackets; i++)
                             {
-                                if (transferLength < transfer->IsoPacket[i].Offset + transfer->IsoPacket[i].Length)
+                                /* capture only packet buffers that contain data to minimize capture size */
+                                if ((transfer->IsoPacket[i].Length > 0) &&
+                                    (transferLength < transfer->IsoPacket[i].Offset + transfer->IsoPacket[i].Length))
+                                {
                                     transferLength = transfer->IsoPacket[i].Offset + transfer->IsoPacket[i].Length;
+                                }
                             }
                         }
                     }
