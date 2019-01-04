@@ -611,7 +611,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             BOOLEAN                       epFound;
             PUSBPCAP_BUFFER_ISOCH_HEADER  packetHeader;
             PVOID                         transferBuffer;
-            BOOLEAN                       attachData;
+            UINT32                        transferLength;
             USHORT                        headerLen;
             ULONG                         i;
 
@@ -673,17 +673,31 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             packetHeader->header.transfer = USBPCAP_TRANSFER_ISOCHRONOUS;
 
+            transferLength = 0;
             if (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN)
             {
                 if (post == TRUE)
                 {
                     /* Read from device, return from controller */
-                    attachData = TRUE;
-                }
-                else
-                {
-                    /* Read from device, on its way to controller */
-                    attachData = FALSE;
+                    if (transfer->TransferBuffer)
+                    {
+                        transferLength =
+                            transfer->IsoPacket[transfer->NumberOfPackets - 1].Offset +
+                            transfer->IsoPacket[transfer->NumberOfPackets - 1].Length;
+
+                        /* In practice, the array is always sorted in order of offsets.
+                           However, this is not guaranteed, so we scan for the maximum. */
+                        for (i = 0; i < transfer->NumberOfPackets; i++)
+                        {
+                            if (transferLength < transfer->IsoPacket[i].Offset + transfer->IsoPacket[i].Length)
+                                transferLength = transfer->IsoPacket[i].Offset + transfer->IsoPacket[i].Length;
+                        }
+                    }
+                    else if (transfer->TransferBufferMDL)
+                    {
+                        /* If the transfer buffer is an MDL, the buffer length can be retrieved directly. */
+                        transferLength = MmGetMdlByteCount(transfer->TransferBufferMDL);
+                    }
                 }
             }
             else
@@ -691,23 +705,18 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
                 if (post == FALSE)
                 {
                     /* Write to device, on its way to controller */
-                    attachData = TRUE;
+                    transferLength = (UINT32)transfer->TransferBufferLength;
                 }
-                else
-                {
-                    /* Write to device, return from controller */
-                    attachData = FALSE;
-                }
-            }
+			}
 
-            if (attachData == FALSE)
+            if (transferLength == 0)
             {
                 packetHeader->header.dataLength = 0;
                 transferBuffer = NULL;
             }
             else
             {
-                packetHeader->header.dataLength = (UINT32)transfer->TransferBufferLength;
+                packetHeader->header.dataLength = transferLength;
 
                 transferBuffer =
                     USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
