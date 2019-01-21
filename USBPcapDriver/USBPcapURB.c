@@ -221,9 +221,11 @@ USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
     }
 
     /* Add Data stage to log */
-    if ((transfer->TransferBufferLength != 0) &&
-        (((post == FALSE) && ((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_OUT)) ||
-         ((post == TRUE) && ((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_IN))))
+    if (transfer->TransferBufferLength != 0 &&
+        ((post == FALSE &&
+        (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_OUT)) ||
+        ((post == TRUE) &&
+        !(transfer->TransferFlags & USBD_TRANSFER_DIRECTION_OUT))))
     {
         PVOID  transferBuffer;
 
