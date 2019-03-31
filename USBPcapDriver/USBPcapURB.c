@@ -222,10 +222,8 @@ USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
 
     /* Add Data stage to log */
     if (transfer->TransferBufferLength != 0 &&
-        ((post == FALSE &&
-        (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_OUT)) ||
-        ((post == TRUE) &&
-        !(transfer->TransferFlags & USBD_TRANSFER_DIRECTION_OUT))))
+        (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_IN) && (post == TRUE)) ||
+        (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_OUT) && (post == FALSE)))
     {
         PVOID  transferBuffer;
 
@@ -385,7 +383,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             pSelectConfiguration = (struct _URB_SELECT_CONFIGURATION*)pUrb;
 
             wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
-            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
             wrapTransfer.TransferBufferLength = 0;
             wrapTransfer.TransferBuffer = NULL;
             wrapTransfer.TransferBufferMDL = NULL;
@@ -446,7 +444,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
 
             wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
-            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
             wrapTransfer.TransferBufferLength = 0;
             wrapTransfer.TransferBuffer = NULL;
             wrapTransfer.TransferBufferMDL = NULL;
@@ -789,7 +787,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
             if (header->Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_DEVICE)
             {
-                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
                 /* D7: Data from Device to Host (1)
                  * D6-D5: Standard (0)
                  * D4-D0: Device (0)
@@ -800,7 +798,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else if (header->Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_ENDPOINT)
             {
-                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
                 /* D7: Data from Device to Host (1)
                  * D6-D5: Standard (0)
                  * D4-D0: Endpoint (2)
@@ -811,7 +809,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else if (header->Function == URB_FUNCTION_GET_DESCRIPTOR_FROM_INTERFACE)
             {
-                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
                 /* D7: Data from Device to Host (1)
                  * D6-D5: Standard (0)
                  * D4-D0: Interface (1)
@@ -822,7 +820,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else if (header->Function == URB_FUNCTION_SET_DESCRIPTOR_TO_DEVICE)
             {
-                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
                 /* D7: Data from Host to Device (0)
                  * D6-D5: Standard (0)
                  * D4-D0: Device (0)
@@ -833,7 +831,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else if (header->Function == URB_FUNCTION_SET_DESCRIPTOR_TO_ENDPOINT)
             {
-                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
                 /* D7: Data from Host to Device (0)
                  * D6-D5: Standard (0)
                  * D4-D0: Endpoint (2)
@@ -844,7 +842,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else if (header->Function == URB_FUNCTION_SET_DESCRIPTOR_TO_INTERFACE)
             {
-                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+                wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_OUT;
                 /* D7: Data from Host to Device (0)
                  * D6-D5: Standard (0)
                  * D4-D0: Interface (1)
