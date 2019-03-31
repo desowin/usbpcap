@@ -16,12 +16,20 @@ DefaultDestDir = 12
 [SourceDisksFiles]
 USBPcap.sys = 1,,
 
-[DefaultInstall.NT]
-CopyFiles = USBPcap.Files
+[DefaultInstall.NTx86]
+CopyFiles = @USBPcap.sys
 AddReg    = USBPcap.AddReg
 
-[DefaultUninstall.NT]
-DelFiles  = USBPcap.Files
+[DefaultUninstall.NTx86]
+DelFiles  = @USBPcap.sys
+DelReg    = USBPcap.DelReg
+
+[DefaultInstall.NTamd64]
+CopyFiles = @USBPcap.sys
+AddReg    = USBPcap.AddReg
+
+[DefaultUninstall.NTamd64]
+DelFiles  = @USBPcap.sys
 DelReg    = USBPcap.DelReg
 
 [USBPcap.AddReg]
@@ -32,13 +40,16 @@ HKLM, System\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-4445535400
 ;Delete USBPcap from UpperFilters
 HKLM, System\CurrentControlSet\Control\Class\{36FC9E60-C465-11CF-8056-444553540000}, UpperFilters, 0x00018002, USBPcap
 
-[USBPcap.Files]
-USBPcap.sys
-
-[DefaultInstall.NT.Services]
+[DefaultInstall.NTx86.Services]
 AddService = USBPcap,,Service.AddService
 
-[DefaultUninstall.NT.Services]
+[DefaultUninstall.NTx86.Services]
+DelService = USBPcap,0x00000200
+
+[DefaultInstall.NTamd64.Services]
+AddService = USBPcap,,Service.AddService
+
+[DefaultUninstall.NTamd64.Services]
 DelService = USBPcap,0x00000200
 
 [Service.AddService]
