@@ -128,6 +128,14 @@ no_removal_pending:
     StrCpy $INSTDIR "$PROGRAMFILES\USBPcap"
   ${EndIf}
 
+  ; Windows To Go is not supported
+  ClearErrors
+  ReadRegDWORD $0 HKLM "SYSTEM\CurrentControlSet\Control" "PortableOperatingSystem"
+  ${If} $0 <> 0
+    MessageBox MB_OK "USBPcap cannot be installed on Windows To Go."
+    Quit
+  ${EndIf}
+
   Pop $R0
 FunctionEnd
 
