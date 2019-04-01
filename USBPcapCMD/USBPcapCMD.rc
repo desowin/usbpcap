@@ -18,7 +18,7 @@ BEGIN
             VALUE "FileDescription",  "USBPcap commandline interface"
             VALUE "FileVersion",      USBPCAPCMD_VERSION_STR
             VALUE "InternalName",     "USBPcap"
-            VALUE "LegalCopyright",   "(c) 2013-2018 Tomasz Mon"
+            VALUE "LegalCopyright",   "(c) 2013-2019 Tomasz Mon"
             VALUE "OriginalFilename", "USBPcapCMD.exe"
             VALUE "ProductName",      "USBPcap"
             VALUE "ProductVersion",   USBPCAPCMD_VERSION_STR
