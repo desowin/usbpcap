@@ -66,7 +66,13 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
             case IRP_MJ_CLEANUP:
                 if (InterlockedCompareExchangePointer(&pDevExt->context.control.pCaptureObject, NULL, NULL) == pStack->FileObject)
                 {
+                    PDEVICE_EXTENSION     rootExt;
+                    PUSBPCAP_ROOTHUB_DATA pRootData;
                     DkCsqCleanUpQueue(pDevObj, pIrp);
+                    /* Stop filtering */
+                    rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
+                    pRootData = (PUSBPCAP_ROOTHUB_DATA)rootExt->context.usb.pDeviceData->pRootData;
+                    memset(&pRootData->filter, 0, sizeof(USBPCAP_ADDRESS_FILTER));
                     /* Free the buffer allocated for this device. */
                     USBPcapBufferRemoveBuffer(pDevExt);
                 }
