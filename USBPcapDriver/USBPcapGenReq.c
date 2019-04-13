@@ -64,9 +64,12 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
 
             case IRP_MJ_CLEANUP:
-                DkCsqCleanUpQueue(pDevObj, pIrp);
-                /* Free the buffer allocated for this device. */
-                USBPcapBufferRemoveBuffer(pDevExt);
+                if (InterlockedCompareExchangePointer(&pDevExt->context.control.pCaptureObject, NULL, NULL) == pStack->FileObject)
+                {
+                    DkCsqCleanUpQueue(pDevObj, pIrp);
+                    /* Free the buffer allocated for this device. */
+                    USBPcapBufferRemoveBuffer(pDevExt);
+                }
                 break;
 
 
