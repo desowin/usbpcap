@@ -82,7 +82,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
                                   &ntDeviceName,
                                   FILE_DEVICE_UNKNOWN,
                                   FILE_DEVICE_SECURE_OPEN,
-                                  TRUE, /* Exclusive device */
+                                  FALSE, /* Non-Exclusive device */
                                   &SDDL_DEVOBJ_SYS_ALL_ADM_ALL_EVERYONE_ANY,
                                   NULL,
                                   &controlDevice);
@@ -112,6 +112,7 @@ NTSTATUS USBPcapCreateRootHubControlDevice(IN PDEVICE_EXTENSION hubExt,
         /* Initialize USBPcap control context */
         controlExt->context.control.id             = id;
         controlExt->context.control.pRootHubObject = hubExt->pThisDevObj;
+        controlExt->context.control.pCaptureObject = NULL;
 
 
         KeInitializeSpinLock(&controlExt->context.control.csqSpinLock);

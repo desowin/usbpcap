@@ -5,6 +5,131 @@
 #include "USBPcapBuffer.h"
 #include "USBPcapHelperFunctions.h"
 
+static NTSTATUS
+HandleUSBPcapControlIOCTL(PIRP pIrp, PIO_STACK_LOCATION pStack,
+                          PDEVICE_EXTENSION rootExt, PUSBPCAP_ROOTHUB_DATA pRootData,
+                          BOOLEAN allowCapture,
+                          SIZE_T *outLength)
+{
+    NTSTATUS ntStat = STATUS_SUCCESS;
+    if (pStack->Parameters.DeviceIoControl.IoControlCode == IOCTL_USBPCAP_GET_HUB_SYMLINK)
+    {
+        PWSTR interfaces;
+        SIZE_T length;
+
+        DkDbgStr("IOCTL_USBPCAP_GET_HUB_SYMLINK");
+
+        interfaces = USBPcapGetHubInterfaces(rootExt->pNextDevObj);
+        if (interfaces == NULL)
+        {
+            return STATUS_NOT_FOUND;
+        }
+
+        length = wcslen(interfaces);
+        length = (length+1)*sizeof(WCHAR);
+
+        if (pStack->Parameters.DeviceIoControl.OutputBufferLength < length)
+        {
+            DkDbgVal("Too small buffer", length);
+            ntStat = STATUS_BUFFER_TOO_SMALL;
+        }
+        else
+        {
+            RtlCopyMemory(pIrp->AssociatedIrp.SystemBuffer,
+                          (PVOID)interfaces,
+                          length);
+            *outLength = length;
+            DkDbgVal("Successfully copied data", length);
+        }
+        ExFreePool((PVOID)interfaces);
+        return ntStat;
+    }
+
+    /* Other IOCTLs are allowed only for the capture handle (exclusive) */
+    if (!allowCapture)
+    {
+        return STATUS_ACCESS_DENIED;
+    }
+
+    switch (pStack->Parameters.DeviceIoControl.IoControlCode)
+    {
+        case IOCTL_USBPCAP_SETUP_BUFFER:
+        {
+            PUSBPCAP_IOCTL_SIZE  pBufferSize;
+
+            if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                sizeof(USBPCAP_IOCTL_SIZE))
+            {
+                ntStat = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            pBufferSize = (PUSBPCAP_IOCTL_SIZE)pIrp->AssociatedIrp.SystemBuffer;
+            DkDbgVal("IOCTL_USBPCAP_SETUP_BUFFER", pBufferSize->size);
+
+            ntStat = USBPcapSetUpBuffer(pRootData, pBufferSize->size);
+            break;
+        }
+
+        case IOCTL_USBPCAP_START_FILTERING:
+        {
+            PUSBPCAP_ADDRESS_FILTER pAddressFilter;
+
+            if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                sizeof(USBPCAP_ADDRESS_FILTER))
+            {
+                ntStat = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            pAddressFilter = (PUSBPCAP_ADDRESS_FILTER)pIrp->AssociatedIrp.SystemBuffer;
+            memcpy(&pRootData->filter, pAddressFilter,
+                   sizeof(USBPCAP_ADDRESS_FILTER));
+
+            DkDbgStr("IOCTL_USBPCAP_START_FILTERING");
+            DkDbgVal("", pAddressFilter->addresses[0]);
+            DkDbgVal("", pAddressFilter->addresses[1]);
+            DkDbgVal("", pAddressFilter->addresses[2]);
+            DkDbgVal("", pAddressFilter->addresses[3]);
+            DkDbgVal("", pAddressFilter->filterAll);
+            break;
+        }
+
+        case IOCTL_USBPCAP_STOP_FILTERING:
+            DkDbgStr("IOCTL_USBPCAP_STOP_FILTERING");
+            memset(&pRootData->filter, 0,
+                   sizeof(USBPCAP_ADDRESS_FILTER));
+            break;
+
+        case IOCTL_USBPCAP_SET_SNAPLEN_SIZE:
+        {
+            PUSBPCAP_IOCTL_SIZE  pSnaplen;
+
+            if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                sizeof(USBPCAP_IOCTL_SIZE))
+            {
+                ntStat = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            pSnaplen = (PUSBPCAP_IOCTL_SIZE)pIrp->AssociatedIrp.SystemBuffer;
+            DkDbgVal("IOCTL_USBPCAP_SET_SNAPLEN_SIZE", pSnaplen->size);
+
+            ntStat = USBPcapSetSnaplenSize(pRootData, pSnaplen->size);
+            break;
+        }
+
+        default:
+        {
+            ULONG ctlCode = IoGetFunctionCodeFromCtlCode(pStack->Parameters.DeviceIoControl.IoControlCode);
+            DkDbgVal("This: IOCTL_XXXXX", ctlCode);
+            ntStat = STATUS_INVALID_DEVICE_REQUEST;
+            break;
+        }
+    }
+    return ntStat;
+}
+
 ///////////////////////////////////////////////////////////////////////
 // I/O device control request handlers
 //
@@ -13,7 +138,7 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     NTSTATUS            ntStat = STATUS_SUCCESS;
     PDEVICE_EXTENSION   pDevExt = NULL;
     PIO_STACK_LOCATION  pStack = NULL;
-    ULONG               ulRes = 0, ctlCode = 0;
+    ULONG               ulRes = 0;
 
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
@@ -27,8 +152,6 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
     pStack = IoGetCurrentIrpStackLocation(pIrp);
 
-    ctlCode = IoGetFunctionCodeFromCtlCode(pStack->Parameters.DeviceIoControl.IoControlCode);
-
     if (pDevExt->deviceMagic == USBPCAP_MAGIC_ROOTHUB ||
         pDevExt->deviceMagic == USBPCAP_MAGIC_DEVICE)
     {
@@ -39,122 +162,20 @@ NTSTATUS DkDevCtl(PDEVICE_OBJECT pDevObj, PIRP pIrp)
     {
         PDEVICE_EXTENSION      rootExt;
         PUSBPCAP_ROOTHUB_DATA  pRootData;
+        BOOLEAN                allowCapture = FALSE;
+        SIZE_T                 length = 0;
         UINT_PTR               info;
-
-        info = (UINT_PTR)0;
 
         rootExt = (PDEVICE_EXTENSION)pDevExt->context.control.pRootHubObject->DeviceExtension;
         pRootData = (PUSBPCAP_ROOTHUB_DATA)rootExt->context.usb.pDeviceData->pRootData;
-
-        switch (pStack->Parameters.DeviceIoControl.IoControlCode)
+        if (InterlockedCompareExchangePointer(&pDevExt->context.control.pCaptureObject, NULL, NULL) == pDevExt->context.control.pCaptureObject)
         {
-            case IOCTL_USBPCAP_SETUP_BUFFER:
-            {
-                PUSBPCAP_IOCTL_SIZE  pBufferSize;
-
-                if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
-                    sizeof(USBPCAP_IOCTL_SIZE))
-                {
-                    ntStat = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                pBufferSize = (PUSBPCAP_IOCTL_SIZE)pIrp->AssociatedIrp.SystemBuffer;
-                DkDbgVal("IOCTL_USBPCAP_SETUP_BUFFER", pBufferSize->size);
-
-                ntStat = USBPcapSetUpBuffer(pRootData, pBufferSize->size);
-                break;
-            }
-
-            case IOCTL_USBPCAP_START_FILTERING:
-            {
-                PUSBPCAP_ADDRESS_FILTER pAddressFilter;
-
-                if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
-                    sizeof(USBPCAP_ADDRESS_FILTER))
-                {
-                    ntStat = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                pAddressFilter = (PUSBPCAP_ADDRESS_FILTER)pIrp->AssociatedIrp.SystemBuffer;
-                memcpy(&pRootData->filter, pAddressFilter,
-                       sizeof(USBPCAP_ADDRESS_FILTER));
-
-                DkDbgStr("IOCTL_USBPCAP_START_FILTERING");
-                DkDbgVal("", pAddressFilter->addresses[0]);
-                DkDbgVal("", pAddressFilter->addresses[1]);
-                DkDbgVal("", pAddressFilter->addresses[2]);
-                DkDbgVal("", pAddressFilter->addresses[3]);
-                DkDbgVal("", pAddressFilter->filterAll);
-                break;
-            }
-
-            case IOCTL_USBPCAP_STOP_FILTERING:
-                DkDbgStr("IOCTL_USBPCAP_STOP_FILTERING");
-                memset(&pRootData->filter, 0,
-                       sizeof(USBPCAP_ADDRESS_FILTER));
-                break;
-
-            case IOCTL_USBPCAP_GET_HUB_SYMLINK:
-            {
-                PWSTR interfaces;
-
-                DkDbgStr("IOCTL_USBPCAP_GET_HUB_SYMLINK");
-
-                interfaces = USBPcapGetHubInterfaces(rootExt->pNextDevObj);
-                if (interfaces == NULL)
-                {
-                    ntStat = STATUS_NOT_FOUND;
-                }
-                else
-                {
-                    SIZE_T length;
-
-                    length = wcslen(interfaces);
-                    length = (length+1)*sizeof(WCHAR);
-
-                    if (pStack->Parameters.DeviceIoControl.OutputBufferLength < length)
-                    {
-                        DkDbgVal("Too small buffer", length);
-                        ntStat = STATUS_BUFFER_TOO_SMALL;
-                    }
-                    else
-                    {
-                        RtlCopyMemory(pIrp->AssociatedIrp.SystemBuffer,
-                                      (PVOID)interfaces,
-                                      length);
-                        info = (UINT_PTR)length;
-                        DkDbgVal("Successfully copied data", length);
-                    }
-                    ExFreePool((PVOID)interfaces);
-                }
-                break;
-            }
-
-            case IOCTL_USBPCAP_SET_SNAPLEN_SIZE:
-            {
-                PUSBPCAP_IOCTL_SIZE  pSnaplen;
-
-                if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
-                    sizeof(USBPCAP_IOCTL_SIZE))
-                {
-                    ntStat = STATUS_INVALID_PARAMETER;
-                    break;
-                }
-
-                pSnaplen = (PUSBPCAP_IOCTL_SIZE)pIrp->AssociatedIrp.SystemBuffer;
-                DkDbgVal("IOCTL_USBPCAP_SET_SNAPLEN_SIZE", pSnaplen->size);
-
-                ntStat = USBPcapSetSnaplenSize(pRootData, pSnaplen->size);
-                break;
-            }
-
-            default:
-                DkDbgVal("This: IOCTL_XXXXX", ctlCode);
-                ntStat = STATUS_INVALID_DEVICE_REQUEST;
-                break;
+            allowCapture = TRUE;
         }
+
+        ntStat = HandleUSBPcapControlIOCTL(pIrp, pStack, rootExt, pRootData, allowCapture, &length);
+
+        info = (UINT_PTR)length;
 
         DkCompleteRequest(pIrp, ntStat, info);
     }

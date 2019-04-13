@@ -37,6 +37,29 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         switch (pStack->MajorFunction)
         {
             case IRP_MJ_CREATE:
+                /* When elevated USBPcapCMD worker is opening the USBPcapX device, the DesiredAccess is:
+                 * SYNCHRONIZE | READ_CONTROL | FILE_WRITE_ATTRIBUTES | FILE_READ_ATTRIBUTES |
+                 * FILE_WRITE_EA | FILE_READ_EA | FILE_APPEND_DATA | FILE_WRITE_DATA | FILE_READ_DATA
+                 *
+                 * When unpriviledged USBPcapCMD opens USBPcapX to get hub symlink, the DesiredAccess is:
+                 * SYNCHRONIZE | FILE_READ_ATTRIBUTES
+                 *
+                 * Check for Read flags and allow only one such interface.
+                 */
+                if (pStack->Parameters.Create.SecurityContext->DesiredAccess & (READ_CONTROL | FILE_READ_DATA))
+                {
+                    PFILE_OBJECT *previous;
+                    previous = InterlockedCompareExchangePointer(&pDevExt->context.control.pCaptureObject, pStack->FileObject, NULL);
+                    if (previous)
+                    {
+                        /* There is another handle that has the READ access - fail this one */
+                        ntStat = STATUS_ACCESS_DENIED;
+                    }
+                }
+                else
+                {
+                    /* Handle will be only able to call IOCTL_USBPCAP_GET_HUB_SYMLINK - allow it */
+                }
                 break;
 
 
@@ -48,6 +71,8 @@ NTSTATUS DkCreateClose(PDEVICE_OBJECT pDevObj, PIRP pIrp)
 
 
             case IRP_MJ_CLOSE:
+                /* Clear the pCaptureObject if the priviledged (able to capture) handle is closed. */
+                InterlockedCompareExchangePointer(&pDevExt->context.control.pCaptureObject, NULL, pStack->FileObject);
                 break;
 
 
@@ -104,8 +129,15 @@ NTSTATUS DkReadWrite(PDEVICE_OBJECT pDevObj, PIRP pIrp)
         {
             case IRP_MJ_READ:
             {
-                ntStat = USBPcapBufferHandleReadIrp(pIrp, pDevExt,
-                                                    &bytesRead);
+                if (pStack->FileObject == InterlockedCompareExchangePointer(&pDevExt->context.control.pCaptureObject, NULL, NULL))
+                {
+                    ntStat = USBPcapBufferHandleReadIrp(pIrp, pDevExt,
+                                                        &bytesRead);
+                }
+                else
+                {
+                    ntStat = STATUS_ACCESS_DENIED;
+                }
                 break;
             }
 

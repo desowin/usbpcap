@@ -100,6 +100,17 @@ typedef struct DEVICE_EXTENSION_Tag {
             USHORT          id;
             PDEVICE_OBJECT  pRootHubObject;  /* Root Hub object */
 
+            /* Pointer to handle that can control capture and read the data.
+             * Only one such handle is allowed at a time.
+             * However, we allow other callers to obtain handle that can be
+             * used to call IOCTL_USBPCAP_GET_HUB_SYMLINK.
+             *
+             * This pointer is NULL if there isn't any open handle with the READ
+             * permission.
+             * This can be accessed only via InterlockedCompareExchangePointer().
+             */
+            PFILE_OBJECT    pCaptureObject;
+
             LIST_ENTRY      lePendIrp;       // Used by I/O Cancel-Safe
             IO_CSQ          ioCsq;           // I/O Cancel-Safe object
             KSPIN_LOCK      csqSpinLock;     // Spin lock object for I/O Cancel-Safe
