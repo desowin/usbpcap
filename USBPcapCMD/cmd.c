@@ -567,7 +567,6 @@ int cmd_interactive(struct thread_data *data)
 {
     int i = 0;
     int max_i;
-    char *filename;
     char buffer[INPUT_BUFFER_SIZE];
     BOOL finished;
     BOOL exit = FALSE;
@@ -1242,7 +1241,6 @@ static void attach_parent_console()
 {
     HANDLE inHandle, outHandle, errHandle;
     BOOL outRedirected, errRedirected;
-    int outType, errType;
 
     inHandle = GetStdHandle(STD_INPUT_HANDLE);
     outHandle = GetStdHandle(STD_OUTPUT_HANDLE);

@@ -94,8 +94,6 @@ BOOLEAN USBPcapSetDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address)
 BOOLEAN USBPcapInitAddressFilter(PUSBPCAP_ADDRESS_FILTER filter, PCHAR list, BOOLEAN filterAll)
 {
     USBPCAP_ADDRESS_FILTER tmp;
-    UINT8 range;
-    UINT8 index;
 
     if (filter == NULL)
     {

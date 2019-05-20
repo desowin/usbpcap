@@ -38,7 +38,6 @@ HANDLE create_filter_read_handle(struct thread_data *data)
     char* inBuf = NULL;
     DWORD inBufSize = 0;
     DWORD bytes_ret;
-    DWORD ioctl;
 
     if (FALSE == USBPcapInitAddressFilter(&filter, data->address_list, data->capture_all))
     {

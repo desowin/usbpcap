@@ -287,7 +287,6 @@ void find_non_standard_hwids(HDEVINFO devs,
     LPTSTR *tmpIds = NULL;
     CONFIGRET cr;
     DEVINST roothub;
-    ULONG hwidType;
 
     /* Assume that all host controller children are Root Hubs */
     cr = CM_Get_Child(&roothub, devInfo->DevInst, 0);
