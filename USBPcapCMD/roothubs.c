@@ -74,6 +74,10 @@ static BOOL is_standard_hwid(LPTSTR hwid)
     {
         return TRUE;
     }
+    else if (_tcscmp("USB\\ROOT_HUB30", hwid) == 0)
+    {
+        return TRUE;
+    }
 
     return FALSE;
 }

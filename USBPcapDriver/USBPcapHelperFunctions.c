@@ -914,6 +914,12 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device)
             found = TRUE;
             break;
         }
+        else if (wcscmp(hardwareIds[id], L"USB\\ROOT_HUB30") == 0)
+        {
+            DkDbgStr("Device is USB\\ROOT_HUB30");
+            found = TRUE;
+            break;
+        }
         else if (IsHwidNonStandardRootHub(hardwareIds[id]) == TRUE)
         {
             DkDbgStr("Device HWID is in NonStandardHWIDs list");
