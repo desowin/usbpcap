@@ -1,0 +1,26 @@
+title: USBPcap
+email: your-email@example.com
+description: Open Source USB Packet capture for Windows that works on XP, Vista, 7, 8 and 10
+baseurl: "/usbpcap"
+url: "https://desowin.org/usbpcap/"
+twitter_username: USBPcap
+github_username: desowin
+
+
+source: .
+markdown: kramdown
+# theme:
+plugins:
+  - jekyll-feed
+
+# Exclude from processing.
+# The following items will not be processed, by default. Create a custom list
+# to override the default setting.
+# exclude:
+#   - Gemfile
+#   - Gemfile.lock
+#   - node_modules
+#   - vendor/bundle/
+#   - vendor/cache/
+#   - vendor/gems/
+#   - vendor/ruby/
