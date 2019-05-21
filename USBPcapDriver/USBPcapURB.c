@@ -881,6 +881,81 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             break;
         }
 
+        case URB_FUNCTION_GET_STATUS_FROM_DEVICE:
+        case URB_FUNCTION_GET_STATUS_FROM_INTERFACE:
+        case URB_FUNCTION_GET_STATUS_FROM_ENDPOINT:
+        case URB_FUNCTION_GET_STATUS_FROM_OTHER:
+        {
+            struct _URB_CONTROL_TRANSFER             wrapTransfer;
+            struct _URB_CONTROL_GET_STATUS_REQUEST*  request;
+
+            request = (struct _URB_CONTROL_GET_STATUS_REQUEST*)pUrb;
+
+            DkDbgVal("URB_FUNCTION_GET_STATUS_FROM_XXX", header->Function);
+
+            /* Set up wrapTransfer */
+            wrapTransfer.PipeHandle = NULL; /* Default pipe handle */
+            wrapTransfer.TransferFlags = USBD_TRANSFER_DIRECTION_IN;
+
+            if (header->Function == URB_FUNCTION_GET_STATUS_FROM_DEVICE)
+            {
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Device (0)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x80;
+            }
+            else if (header->Function == URB_FUNCTION_GET_STATUS_FROM_INTERFACE)
+            {
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Interface (1)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x81;
+            }
+            else if (header->Function == URB_FUNCTION_GET_STATUS_FROM_ENDPOINT)
+            {
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Endpoint (2)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x82;
+            }
+            else if (header->Function == URB_FUNCTION_GET_STATUS_FROM_OTHER)
+            {
+                /* D7: Data from Device to Host (1)
+                 * D6-D5: Standard (0)
+                 * D4-D0: Other (3)
+                 */
+                wrapTransfer.SetupPacket[0] = 0x83;
+            }
+            else
+            {
+                DkDbgVal("Invalid function", header->Function);
+                break;
+            }
+
+            /* 0x00 - GET_STATUS */
+            wrapTransfer.SetupPacket[1] = 0x00;
+            /* wValue is Zero */
+            wrapTransfer.SetupPacket[2] = 0;
+            wrapTransfer.SetupPacket[3] = 0;
+            /* wIndex */
+            wrapTransfer.SetupPacket[4] = (request->Index & 0x00FF);
+            wrapTransfer.SetupPacket[5] = (request->Index & 0xFF00) >> 8;
+            /* wLength must be 2 */
+            wrapTransfer.SetupPacket[6] = (request->TransferBufferLength & 0x00FF);
+            wrapTransfer.SetupPacket[7] = (request->TransferBufferLength & 0xFF00) >> 8;
+
+            wrapTransfer.TransferBufferLength = request->TransferBufferLength;
+            wrapTransfer.TransferBuffer = request->TransferBuffer;
+            wrapTransfer.TransferBufferMDL = request->TransferBufferMDL;
+
+            USBPcapAnalyzeControlTransfer(&wrapTransfer, header,
+                                          pDeviceData, pIrp, post);
+            break;
+        }
+
         case URB_FUNCTION_VENDOR_DEVICE:
         case URB_FUNCTION_VENDOR_INTERFACE:
         case URB_FUNCTION_VENDOR_ENDPOINT:
@@ -980,7 +1055,6 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
                                           pDeviceData, pIrp, post);
             break;
         }
-
 
         default:
             DkDbgVal("Unknown URB type", header->Function);
