@@ -2,6 +2,24 @@
 layout: default
 ---
 
+{% raw %}
+<script>
+    window.onload = function() {
+        $.urlParam = function(name){
+            var results = new RegExp('[\\?&]' + name + '=([^&#]*)').exec(window.location.href);
+            if (results==null){
+            return null;
+            }else{
+            return results[1] || 0;
+            }
+        }
+         setTimeout(function() {
+            window.location = 'https://github.com/desowin/usbpcap/releases/download/'+$.urlParam('file');
+        }, 2000);
+    }
+</script>
+{% endraw %}
+
 Thank you for downloading USBPcap
 ---------------------------------
 
