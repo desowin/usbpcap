@@ -25,6 +25,7 @@
 #define USBPCAP_TRANSFER_INTERRUPT   1
 #define USBPCAP_TRANSFER_CONTROL     2
 #define USBPCAP_TRANSFER_BULK        3
+#define USBPCAP_TRANSFER_UNKNOWN     0xFF
 
 /* info byte fields:
  * bit 0 (LSB) - when 1: PDO -> FDO
