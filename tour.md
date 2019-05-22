@@ -39,7 +39,9 @@ After you're done collecting data, press Ctrl+C and start Wireshark. Once starte
 
 If you didn't like that in steps 2 and 3 you had to finish capturing before having a chance to look at the data, you can also do a live capture. In order to do so, you must have running the cmd.exe with elevated privileges (as Administrator). Then enter the following command:
 
-USBPcapCMD.exe -d \\\\.\\USBPcap2 -o - | "C:\\Program Files\\Wireshark\\Wireshark.exe" -k -i -
+```
+USBPcapCMD.exe -d \\.\USBPcap2 -o - | "C:\Program Files\Wireshark\Wireshark.exe" -k -i -
+```
 
 This should result in live capture from standard input in Wireshark as shown below.
 

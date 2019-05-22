@@ -25,12 +25,13 @@ Base packet header
 
 The USBPCAP\_BUFFER\_PACKET\_HEADER as defined in USBPcapBuffer.h:
 
+```c
 #pragma pack(1)
 typedef struct
 {
     USHORT       headerLen; /\* This header length \*/
     UINT64       irpId;     /\* I/O Request packet ID \*/
-    USBD\_STATUS  status;    /\* USB status code
+    USBD_STATUS  status;    /\* USB status code
                                (on return from host controller) \*/
     USHORT       function;  /\* URB Function \*/
     UCHAR        info;      /\* I/O Request info \*/
@@ -41,7 +42,8 @@ typedef struct
     UCHAR        transfer;  /\* transfer type \*/
 
     UINT32       dataLength;/\* Data length \*/
-} USBPCAP\_BUFFER\_PACKET\_HEADER, \*PUSBPCAP\_BUFFER\_PACKET\_HEADER;
+} USBPCAP_BUFFER_PACKET_HEADER, \*PUSBPCAP_BUFFER_PACKET_HEADER;
+```
 
 *   headerLen (offset 0) describes the total length, in bytes, of the header (including all transfer-specific header data).
 *   irpId (offset 2) is merely a pointer to IRP casted to the UINT64. This value can be used to match the request with respons.
@@ -64,35 +66,37 @@ All transfer-specific headers inherit the USBPCAP\_BUFFER\_PACKET\_HEADER, so fi
 
 When transfer is equal to USBPCAP\_TRANSFER\_ISOCHRONOUS (0) the header type is USBPCAP\_BUFFER\_ISOCH\_HEADER  
 
+```c
 /\* Note about isochronous packets:
  \*   packet\[x\].length, packet\[x\].status and errorCount are only relevant
- \*   when USBPCAP\_INFO\_PDO\_TO\_FDO is set
+ \*   when USBPCAP_INFO_PDO_TO_FDO is set
  \*
  \*   packet\[x\].length is not used for isochronous OUT transfers.
  \*
  \* Buffer data is attached to:
  \*   \* for isochronous OUT transactions (write to device)
- \*       Requests (USBPCAP\_INFO\_PDO\_TO\_FDO is not set)
+ \*       Requests (USBPCAP_INFO_PDO_TO_FDO is not set)
  \*   \* for isochronous IN transactions (read from device)
- \*       Responses (USBPCAP\_INFO\_PDO\_TO\_FDO is set)
+ \*       Responses (USBPCAP_INFO_PDO_TO_FDO is set)
  \*/
 #pragma pack(1)
 typedef struct
 {
     ULONG        offset;
     ULONG        length;
-    USBD\_STATUS  status;
-} USBPCAP\_BUFFER\_ISO\_PACKET, \*PUSBPCAP\_BUFFER\_ISO\_PACKET;
+    USBD_STATUS  status;
+} USBPCAP_BUFFER_ISO_PACKET, \*PUSBPCAP_BUFFER_ISO_PACKET;
 
 #pragma pack(1)
 typedef struct
 {
-    USBPCAP\_BUFFER\_PACKET\_HEADER  header;
+    USBPCAP_BUFFER_PACKET_HEADER  header;
     ULONG                         startFrame;
     ULONG                         numberOfPackets;
     ULONG                         errorCount;
-    USBPCAP\_BUFFER\_ISO\_PACKET     packet\[1\];
-} USBPCAP\_BUFFER\_ISOCH\_HEADER, \*PUSBPCAP\_BUFFER\_ISOCH\_HEADER;
+    USBPCAP_BUFFER_ISO_PACKET     packet\[1\];
+} USBPCAP_BUFFER_ISOCH_HEADER, \*PUSBPCAP_BUFFER_ISOCH_HEADER;
+```
 
 ### USBPCAP\_TRANSFER\_INTERRUPT
 
@@ -102,16 +106,18 @@ When transfer is equal to USBPCAP\_TRANSFER\_INTERRUPT (1) the header type is US
 
 When transfer is equal to USBPCAP\_TRANSFER\_CONTROL (2) the header type is USBPCAP\_BUFFER\_CONTROL\_HEADER  
 
-#define USBPCAP\_CONTROL\_STAGE\_SETUP   0
-#define USBPCAP\_CONTROL\_STAGE\_DATA    1
-#define USBPCAP\_CONTROL\_STAGE\_STATUS  2
+```c
+#define USBPCAP_CONTROL_STAGE_SETUP   0
+#define USBPCAP_CONTROL_STAGE_DATA    1
+#define USBPCAP_CONTROL_STAGE_STATUS  2
 
 #pragma pack(1)
 typedef struct
 {
-    USBPCAP\_BUFFER\_PACKET\_HEADER  header;
+    USBPCAP_BUFFER_PACKET_HEADER  header;
     UCHAR                         stage;
-} USBPCAP\_BUFFER\_CONTROL\_HEADER, \*PUSBPCAP\_BUFFER\_CONTROL\_HEADER;
+} USBPCAP_BUFFER_CONTROL_HEADER, \*PUSBPCAP_BUFFER_CONTROL_HEADER;
+```
 
 Where stage determines the control transfer stage.
 

@@ -26,7 +26,9 @@ When writing USB class dissector you will be mostly interested in following diss
 
 Currently Wireshark does not have dissectors for USB isochronous transfers. To register your dissector for dissecting bulk data of some USB class you call following function:
 
-dissector\_add\_uint("usb.bulk", IF\_CLASS\_XXX, handle);
+```c
+dissector_add_uint("usb.bulk", IF_CLASS_XXX, handle);
+```
 
 IF\_CLASS\_XXX is one of the IF\_CLASS\_ defines from packet-usb.h.
 

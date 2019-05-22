@@ -17,7 +17,9 @@ You can get the latest Wireshark source code using the [Git](http://git-scm.com/
 
 To download complete repository use the _git clone_ command:  
 
+```bash
 git clone https://github.com/desowin/usbpcap.git
+```
 
 ### Contribute Code
 
@@ -44,7 +46,9 @@ To build USBPcap release files simply execute the **build\_release.bat** file. P
 When installing TESTSIGNED release on 64-bit Windows you will be notified about unsigned driver shortly after installation. To make the driver work you must enable the TESTSIGNING to boot into Test Mode.  
 To enable testsigning issue following command (in administrator command line):
 
+```
 Bcdedit.exe -set TESTSIGNING ON
+```
 
 Building USBPcap installer
 --------------------------
