@@ -19,12 +19,6 @@ I think we could work around that issue by making an small application to scan t
 
 Mailing list thread: [USB 3.0 sniffing](https://groups.google.com/d/msg/usbpcap/J3xw10oQpVI/SQMFu9VD_eIJ).
 
-### Better integration with Wireshark
-
-Currently USBPcapCMD needs to be used in order to get the capture files. The ideal solution would be to be able to "click" the USBPcap capture from Wireshark capture interfaces window.
-
-Possible solution: Implement USBPcap's extcap (see: [Expanding Wireshark Beyond Network Interfaces](http://sharkfest.wireshark.org/sharkfest.13/presentations/NAP-11_Expanding-Wireshark-Beyond-Ethernet-and-Network-Interfaces_Kershaw-Ryan.pdf)).
-
 ### Notify user about packet drops
 
 When there is packet drop caused by full capture buffer user won't get any information about how many packets (even if any) were dropped.
