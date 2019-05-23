@@ -2,6 +2,11 @@
 layout: default
 ---
 
+Goodbye Pledgie.com!
+--------------------
+
+There were two USBPcap certificate funds carried on now defunct Pledgie.com. More information about Pledgie is available at [fundraise.net](http://fundraise.net/what-happened-to-pledgie/).
+
 USBPcap certificate fund donors
 -------------------------------
 
@@ -13,8 +18,6 @@ USBPcap certificate fund donors
 *   Anonymous donor
 *   RyanC
 
-  
-[![Click here to lend your support to: USBPcap certificate fund and make a donation at www.pledgie.com !](http://www.pledgie.com/campaigns/19773.png?skin_name=chrome)](http://www.pledgie.com/campaigns/19773)  
 Thanks!
 
 USBPcap certificate renewal fund donors
@@ -24,8 +27,6 @@ USBPcap certificate renewal fund donors
 *   andyolivares
 *   19 other anonymous donors
 
-  
-[![Click here to lend your support to: USBPcap code signing certificate renewal and make a donation at pledgie.com !](https://pledgie.com/campaigns/33509.png?skin_name=chrome)](https://pledgie.com/campaigns/33509)  
 Thanks!
 
 USBPcap is looking for fiscal sponsor
