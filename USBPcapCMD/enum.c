@@ -3,6 +3,8 @@
  *
  * Based on usbview sample
  *   Copyright (c) 1997-1998 Microsoft Corporation
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <windows.h>

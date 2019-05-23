@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2013-2019 Tomasz Moń <desowin@gmail.com>
+ *
+ * SPDX-License-Identifier: GPL-2.0
+ */
+
 #include "USBPcapMain.h"
 #include "USBPcapHelperFunctions.h"
 #include "USBPcapRootHubControl.h"

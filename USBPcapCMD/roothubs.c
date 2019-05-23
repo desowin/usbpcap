@@ -3,6 +3,8 @@
  *
  * Based on devcon sample
  *   Copyright (c) Microsoft Corporation
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #include <windows.h>

@@ -1,5 +1,7 @@
 /*
  * Copyright (c) 2013 Tomasz Moń <desowin@gmail.com>
+ *
+ * SPDX-License-Identifier: BSD-2-Clause
  */
 
 #ifndef USBPCAP_CMD_ROOTHUBS_H
