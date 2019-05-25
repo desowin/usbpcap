@@ -19,6 +19,7 @@
 #include "getopt.h"
 #include "roothubs.h"
 #include "version.h"
+#include "descriptors.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
@@ -633,7 +634,7 @@ int cmd_interactive(struct thread_data *data)
     while (usbpcapFilters[i] != NULL)
     {
         printf("%d %s\n", i+1, usbpcapFilters[i]->device);
-        enumerate_attached_devices(usbpcapFilters[i]->device, ENUMERATE_USBPCAPCMD);
+        enumerate_print_usbpcap_interactive(usbpcapFilters[i]->device);
         i++;
     }
 
@@ -820,6 +821,8 @@ static void start_capture(struct thread_data *data)
                                    FALSE, /* Default to not signalled */
                                    NULL);
 
+    memset(&data->descriptors, 0, sizeof(data->descriptors));
+
     if (IsElevated() == TRUE)
     {
         data->read_handle = INVALID_HANDLE_VALUE;
@@ -837,6 +840,10 @@ static void start_capture(struct thread_data *data)
                                              FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED,
                                              NULL);
         }
+
+        /* TODO: Make this configurable and only get descriptors from filtered devices */
+        data->descriptors.descriptors = descriptors_generate_pcap(data->device, &data->descriptors.descriptors_len);
+        data->descriptors.buf_written = 0;
 
         data->read_handle = create_filter_read_handle(data);
 
@@ -1067,6 +1074,11 @@ static void start_capture(struct thread_data *data)
         WaitForSingleObject(process, INFINITE);
         CloseHandle(process);
     }
+
+    if (data->descriptors.descriptors)
+    {
+        descriptors_free_pcap(data->descriptors.descriptors);
+    }
 }
 
 static void print_extcap_version(void)
@@ -1130,7 +1142,7 @@ static int print_extcap_options(const char *device)
     printf("arg {number=%d}{call=--devices}{display=Attached USB Devices}{tooltip=Select individual devices to capture from}{type=multicheck}\n",
            EXTCAP_ARGNUM_MULTICHECK);
 
-    enumerate_attached_devices(device, ENUMERATE_EXTCAP);
+    enumerate_print_extcap_config(device);
 
     return 0;
 }

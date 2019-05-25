@@ -25,6 +25,7 @@ TARGETLIBS = $(SDK_LIB_PATH)\hid.lib \
 
 SOURCES = USBPcapCMD.rc \
           cmd.c \
+          descriptors.c \
           enum.c \
           filters.c \
           getopt.c \

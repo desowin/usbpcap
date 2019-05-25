@@ -8,27 +8,6 @@
 #include "USBPcapBuffer.h"
 
 #define USBPCAP_BUFFER_TAG  (ULONG)'ffuB'
-/* USB packets, beginning with a USBPcap header */
-#define DLT_USBPCAP         249
-
-#pragma pack(1)
-typedef struct pcap_hdr_s {
-    UINT32 magic_number;   /* magic number */
-    UINT16 version_major;  /* major version number */
-    UINT16 version_minor;  /* minor version number */
-    INT32  thiszone;       /* GMT to local correction */
-    UINT32 sigfigs;        /* accuracy of timestamps */
-    UINT32 snaplen;        /* max length of captured packets, in octets */
-    UINT32 network;        /* data link type */
-} pcap_hdr_t;
-
-#pragma pack(1)
-typedef struct pcaprec_hdr_s {
-    UINT32 ts_sec;         /* timestamp seconds */
-    UINT32 ts_usec;        /* timestamp microseconds */
-    UINT32 incl_len;       /* number of octets of packet saved in file */
-    UINT32 orig_len;       /* actual length of packet */
-} pcaprec_hdr_t;
 
 __inline static UINT32
 USBPcapGetBufferFree(PUSBPCAP_ROOTHUB_DATA pData)

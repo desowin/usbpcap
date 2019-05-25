@@ -8,6 +8,20 @@
 #define USBPCAP_CMD_THREAD_H
 
 #include <windows.h>
+#include "USBPcap.h"
+
+struct inject_descriptors
+{
+    void *descriptors;   /* Packets to inject after pcap header on capture start */
+    int descriptors_len; /* inject_packets length in bytes */
+
+    /* Buffer to keep track of pcap data read from driver. Once it is filled, the magic
+     * and DLT is checked and if it matches, the the inject_packets are written after
+     * the header and then the normal capture continues.
+     */
+    unsigned char buf[sizeof(pcap_hdr_t)];
+    int buf_written;
+};
 
 struct thread_data
 {
@@ -24,6 +38,8 @@ struct thread_data
     HANDLE job_handle; /* Handle to job object of worker process. */
     HANDLE worker_process_thread; /* Handle to breakaway worker process main thread. */
     HANDLE exit_event; /* Handle to event that indicates that main thread should exit. */
+
+    struct inject_descriptors descriptors;
 };
 
 HANDLE create_filter_read_handle(struct thread_data *data);

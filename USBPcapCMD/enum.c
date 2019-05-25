@@ -131,7 +131,8 @@ fallback:
 static void EnumerateHub(PTSTR hub,
                          PUSB_NODE_CONNECTION_INFORMATION connection_info,
                          ULONG level,
-                         EnumDeviceInfoCallback callback);
+                         EnumDeviceInfoCallback callback,
+                         EnumConnectedPortCallback port_callback, void *port_ctx);
 
 static void print_indent(ULONG level)
 {
@@ -375,7 +376,7 @@ static PTSTR GetExternalHubName(HANDLE Hub, ULONG ConnectionIndex)
 {
     BOOL                        success;
     ULONG                       nBytes;
-    USB_NODE_CONNECTION_NAME	extHubName;
+    USB_NODE_CONNECTION_NAME    extHubName;
     PUSB_NODE_CONNECTION_NAME   extHubNameW;
     PTSTR                       extHubNameA;
 
@@ -780,7 +781,8 @@ VOID PrintDeviceDesc(__in PCTSTR DriverName, ULONG Index,
 
 static VOID
 EnumerateHubPorts(HANDLE hHubDevice, UCHAR NumPorts, ULONG level,
-                  USHORT hubAddress, EnumDeviceInfoCallback callback)
+                  USHORT hubAddress, EnumDeviceInfoCallback print_callback,
+                  EnumConnectedPortCallback port_callback, void *port_ctx)
 {
     ULONG       index;
     BOOL        success;
@@ -815,18 +817,27 @@ EnumerateHubPorts(HANDLE hHubDevice, UCHAR NumPorts, ULONG level,
         // If there is a device connected, get the Device Description
         if (connectionInfo.ConnectionStatus != NoDeviceConnected)
         {
-            driverKeyName = GetDriverKeyName(hHubDevice,
-                                             index);
-
-            if (driverKeyName)
+            if (print_callback)
             {
-                PrintDeviceDesc(driverKeyName, index, level,
-                                !connectionInfo.DeviceIsHub,
-                                connectionInfo.DeviceAddress,
-                                hubAddress,
-                                callback);
+                driverKeyName = GetDriverKeyName(hHubDevice,
+                                                 index);
 
-                GlobalFree(driverKeyName);
+                if (driverKeyName)
+                {
+                    PrintDeviceDesc(driverKeyName, index, level,
+                                    !connectionInfo.DeviceIsHub,
+                                    connectionInfo.DeviceAddress,
+                                    hubAddress,
+                                    print_callback);
+
+                    GlobalFree(driverKeyName);
+                }
+            }
+
+            if ((connectionInfo.ConnectionStatus == DeviceConnected) && port_callback)
+            {
+                port_callback(hHubDevice, index, connectionInfo.DeviceAddress,
+                              &connectionInfo.DeviceDescriptor, port_ctx);
             }
 
             // If the device connected to the port is an external hub, get the
@@ -843,7 +854,9 @@ EnumerateHubPorts(HANDLE hHubDevice, UCHAR NumPorts, ULONG level,
                     EnumerateHub(extHubName,
                                  &connectionInfo,
                                  level+1,
-                                 callback);
+                                 print_callback,
+                                 port_callback,
+                                 port_ctx);
                     GlobalFree(extHubName);
                 }
             }
@@ -855,7 +868,8 @@ EnumerateHubPorts(HANDLE hHubDevice, UCHAR NumPorts, ULONG level,
 static void EnumerateHub(PTSTR hub,
                          PUSB_NODE_CONNECTION_INFORMATION connection_info,
                          ULONG level,
-                         EnumDeviceInfoCallback callback)
+                         EnumDeviceInfoCallback print_callback,
+                         EnumConnectedPortCallback port_callback, void *port_ctx)
 {
     PUSB_NODE_INFORMATION   hubInfo;
     HANDLE                  hHubDevice;
@@ -945,7 +959,7 @@ static void EnumerateHub(PTSTR hub,
                       hubInfo->u.HubInformation.HubDescriptor.bNumberOfPorts,
                       level,
                       (connection_info == NULL) ? 0 : connection_info->DeviceAddress,
-                      callback);
+                      print_callback, port_callback, port_ctx);
 
 EnumerateHubError:
     // Clean up any stuff that got allocated
@@ -1009,7 +1023,7 @@ get_usbpcap_filter_hub_symlink(const char *filter,
     return bytes_ret;
 }
 
-void enumerate_attached_devices(const char *filter, EnumerationType enumType)
+void enumerate_print_usbpcap_interactive(const char *filter)
 {
     WCHAR  outBuf[IOCTL_OUTPUT_BUFFER_SIZE];
     DWORD  bytes_ret;
@@ -1018,31 +1032,45 @@ void enumerate_attached_devices(const char *filter, EnumerationType enumType)
     if (bytes_ret > 0)
     {
         PTSTR str;
-        EnumDeviceInfoCallback callback;
 
-        switch (enumType)
-        {
-            case ENUMERATE_USBPCAPCMD:
-                printf("  ");
-                wide_print(outBuf);
-                printf("\n");
+        printf("  ");
+        wide_print(outBuf);
+        printf("\n");
 
-                callback = print_usbpcapcmd;
-                break;
-            case ENUMERATE_EXTCAP:
-                callback = print_extcap_config;
-                break;
-            default:
-                callback = NULL;
-                break;
-        }
-
-        if (callback)
-        {
-            str = WideStrToMultiStr(outBuf);
-            EnumerateHub(str, NULL, 0, callback);
-            GlobalFree(str);
-        }
+        str = WideStrToMultiStr(outBuf);
+        EnumerateHub(str, NULL, 0, print_usbpcapcmd, NULL, NULL);
+        GlobalFree(str);
     }
 }
 
+void enumerate_print_extcap_config(const char *filter)
+{
+    WCHAR  outBuf[IOCTL_OUTPUT_BUFFER_SIZE];
+    DWORD  bytes_ret;
+
+    bytes_ret = get_usbpcap_filter_hub_symlink(filter, &outBuf[0], sizeof(outBuf)/sizeof(outBuf[0]));
+    if (bytes_ret > 0)
+    {
+        PTSTR str;
+
+        str = WideStrToMultiStr(outBuf);
+        EnumerateHub(str, NULL, 0, print_extcap_config, NULL, NULL);
+        GlobalFree(str);
+    }
+}
+
+void enumerate_all_connected_devices(const char *filter, EnumConnectedPortCallback cb, void *ctx)
+{
+    WCHAR  outBuf[IOCTL_OUTPUT_BUFFER_SIZE];
+    DWORD  bytes_ret;
+
+    bytes_ret = get_usbpcap_filter_hub_symlink(filter, &outBuf[0], sizeof(outBuf)/sizeof(outBuf[0]));
+    if (bytes_ret > 0)
+    {
+        PTSTR str;
+
+        str = WideStrToMultiStr(outBuf);
+        EnumerateHub(str, NULL, 0, NULL, cb, ctx);
+        GlobalFree(str);
+    }
+}

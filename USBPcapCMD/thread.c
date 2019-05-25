@@ -11,6 +11,7 @@
 #include "USBPcap.h"
 #include "thread.h"
 #include "iocontrol.h"
+#include "descriptors.h"
 
 HANDLE create_filter_read_handle(struct thread_data *data)
 {
@@ -113,6 +114,73 @@ finish:
     return INVALID_HANDLE_VALUE;
 }
 
+static void write_data(struct thread_data* data, LPOVERLAPPED write_overlapped,
+                       void *buffer, DWORD bytes)
+{
+    /* Write data to the end of the file. */
+    write_overlapped->Offset = 0xFFFFFFFF;
+    write_overlapped->OffsetHigh = 0xFFFFFFFF;
+    if (!WriteFile(data->write_handle, buffer, bytes, NULL, write_overlapped))
+    {
+        DWORD err = GetLastError();
+        if (err == ERROR_IO_PENDING)
+        {
+            DWORD written;
+            if (!GetOverlappedResult(data->write_handle, write_overlapped, &written, TRUE))
+            {
+                fprintf(stderr, "GetOverlappedResult() on write handle failed: %d\n", GetLastError());
+            }
+            else if (written != bytes)
+            {
+                fprintf(stderr, "Wrote %d bytes instead of %d. Stopping capture.\n", written, bytes);
+                data->process = FALSE;
+            }
+        }
+        else
+        {
+            /* Failed to write to output. Quit. */
+            fprintf(stderr, "Write failed (%d). Stopping capture.\n", err);
+            data->process = FALSE;
+        }
+    }
+    FlushFileBuffers(data->write_handle);
+    ResetEvent(write_overlapped->hEvent);
+}
+
+static void process_data(struct thread_data* data, LPOVERLAPPED write_overlapped,
+                         unsigned char *buffer, DWORD bytes)
+{
+    if (data->descriptors.buf_written < sizeof(pcap_hdr_t))
+    {
+        DWORD to_write = sizeof(pcap_hdr_t) - data->descriptors.buf_written;
+        if (to_write > bytes)
+        {
+            to_write = bytes;
+        }
+        memcpy(&data->descriptors.buf[data->descriptors.buf_written], buffer, to_write);
+        data->descriptors.buf_written += to_write;
+
+        if (data->descriptors.buf_written == sizeof(pcap_hdr_t))
+        {
+            /* TODO: Verify magic and DLT */
+            write_data(data, write_overlapped, data->descriptors.buf, sizeof(pcap_hdr_t));
+            if (data->descriptors.descriptors_len > 0)
+            {
+                write_data(data, write_overlapped, data->descriptors.descriptors, data->descriptors.descriptors_len);
+            }
+        }
+        buffer += to_write;
+        bytes -= to_write;
+
+        if (bytes == 0)
+        {
+            /* Nothing more to write */
+            return;
+        }
+    }
+    write_data(data, write_overlapped, buffer, bytes);
+}
+
 DWORD WINAPI read_thread(LPVOID param)
 {
     struct thread_data* data = (struct thread_data*)param;
@@ -211,7 +279,6 @@ DWORD WINAPI read_thread(LPVOID param)
     for (; data->process == TRUE;)
     {
         DWORD dw;
-        DWORD written;
 
         dw = WaitForMultipleObjects(table_count,
                                     table,
@@ -225,33 +292,7 @@ DWORD WINAPI read_thread(LPVOID param)
             {
                 GetOverlappedResult(data->read_handle, &read_overlapped, &read, TRUE);
                 ResetEvent(read_overlapped.hEvent);
-                /* Write data to the end of the file. */
-                write_overlapped.Offset = 0xFFFFFFFF;
-                write_overlapped.OffsetHigh = 0xFFFFFFFF;
-                if (!WriteFile(data->write_handle, buffer, read, NULL, &write_overlapped))
-                {
-                    err = GetLastError();
-                    if (err == ERROR_IO_PENDING)
-                    {
-                        if (!GetOverlappedResult(data->write_handle, &write_overlapped, &written, TRUE))
-                        {
-                            fprintf(stderr, "GetOverlappedResult() on write handle failed: %d\n", GetLastError());
-                        }
-                        else if (written != read)
-                        {
-                            fprintf(stderr, "Wrote %d bytes instead of %d. Stopping capture.\n", written, read);
-                            data->process = FALSE;
-                        }
-                    }
-                    else
-                    {
-                        /* Failed to write to output. Quit. */
-                        fprintf(stderr, "Write failed (%d). Stopping capture.\n", GetLastError());
-                        data->process = FALSE;
-                    }
-                }
-                FlushFileBuffers(data->write_handle);
-                ResetEvent(write_overlapped.hEvent);
+                process_data(data, &write_overlapped, buffer, read);
                 /* Start new read. */
                 ReadFile(data->read_handle, (PVOID)buffer, data->bufferlen, &read, &read_overlapped);
             }
