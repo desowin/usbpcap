@@ -16,14 +16,13 @@
 HANDLE create_filter_read_handle(struct thread_data *data)
 {
     HANDLE filter_handle = INVALID_HANDLE_VALUE;
-    USBPCAP_ADDRESS_FILTER filter;
     char* inBuf = NULL;
     DWORD inBufSize = 0;
     DWORD bytes_ret;
 
     if (data->capture_new)
     {
-        USBPcapSetDeviceFiltered(&filter, 0);
+        USBPcapSetDeviceFiltered(&data->filter, 0);
     }
 
     filter_handle = CreateFileA(data->device,
@@ -78,8 +77,8 @@ HANDLE create_filter_read_handle(struct thread_data *data)
 
     if (!DeviceIoControl(filter_handle,
                          IOCTL_USBPCAP_START_FILTERING,
-                         (char*)&filter,
-                         sizeof(filter),
+                         (char*)&data->filter,
+                         sizeof(USBPCAP_ADDRESS_FILTER),
                          NULL,
                          0,
                          &bytes_ret,
