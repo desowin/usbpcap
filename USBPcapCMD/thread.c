@@ -162,9 +162,9 @@ static void process_data(struct thread_data* data, LPOVERLAPPED write_overlapped
 
         if (data->descriptors.buf_written == sizeof(pcap_hdr_t))
         {
-            /* TODO: Verify magic and DLT */
+            pcap_hdr_t *hdr = (pcap_hdr_t *)data->descriptors.buf;
             write_data(data, write_overlapped, data->descriptors.buf, sizeof(pcap_hdr_t));
-            if (data->descriptors.descriptors_len > 0)
+            if ((hdr->magic_number == 0xA1B2C3D4) && (hdr->network == DLT_USBPCAP) && (data->descriptors.descriptors_len > 0))
             {
                 write_data(data, write_overlapped, data->descriptors.descriptors, data->descriptors.descriptors_len);
             }
