@@ -103,6 +103,7 @@ static PUSB_DESCRIPTOR_REQUEST get_config_descriptor(HANDLE hub, ULONG port, UCH
                          request, nBytes, request, nBytes, &nBytesReturned, NULL))
     {
         fprintf(stderr, "Failed to get descriptor - %d\n", GetLastError());
+        free(request);
         return NULL;
     }
 
