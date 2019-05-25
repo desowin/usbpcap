@@ -11,6 +11,7 @@
 #include <devioctl.h>
 #include <Usbioctl.h>
 #include "enum.h"
+#include "iocontrol.h"
 #include "USBPcap.h"
 
 typedef struct _list_entry
@@ -23,6 +24,7 @@ typedef struct _list_entry
 typedef struct _descriptor_callback_context
 {
     USHORT roothub;
+    PUSBPCAP_ADDRESS_FILTER addresses;
     list_entry *head;
     list_entry *tail;
 } descriptor_callback_context;
@@ -278,6 +280,11 @@ descriptor_callback(HANDLE hub, ULONG port, USHORT deviceAddress,
     descriptor_callback_context *ctx = (descriptor_callback_context *)context;
     PUSB_DESCRIPTOR_REQUEST request;
 
+    if (!USBPcapIsDeviceFiltered(ctx->addresses, deviceAddress))
+    {
+        return;
+    }
+
     write_setup_packet(ctx, deviceAddress, 0x80, 6,
                        USB_DEVICE_DESCRIPTOR_TYPE << 8, 0, 18, FALSE);
     write_device_descriptor_data(ctx, deviceAddress, desc);
@@ -349,7 +356,7 @@ void *generate_pcap_packets(list_entry *head, int *out_len)
     return pcap;
 }
 
-void *descriptors_generate_pcap(const char *filter, int *pcap_length)
+void *descriptors_generate_pcap(const char *filter, int *pcap_length, PUSBPCAP_ADDRESS_FILTER addresses)
 {
     void *pcap_packets;
     int pcap_packets_length;
@@ -370,6 +377,7 @@ void *descriptors_generate_pcap(const char *filter, int *pcap_length)
         }
     }
     ctx.roothub = (USHORT)atoi(tmp);
+    ctx.addresses = addresses;
     ctx.head = NULL;
     ctx.tail = NULL;
     enumerate_all_connected_devices(filter, descriptor_callback, &ctx);

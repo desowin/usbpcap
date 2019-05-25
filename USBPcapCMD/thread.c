@@ -21,12 +21,6 @@ HANDLE create_filter_read_handle(struct thread_data *data)
     DWORD inBufSize = 0;
     DWORD bytes_ret;
 
-    if (FALSE == USBPcapInitAddressFilter(&filter, data->address_list, data->capture_all))
-    {
-        fprintf(stderr, "USBPcapInitAddressFilter failed!\n");
-        goto finish;
-    }
-
     if (data->capture_new)
     {
         USBPcapSetDeviceFiltered(&filter, 0);

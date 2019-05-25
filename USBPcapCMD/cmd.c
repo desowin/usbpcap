@@ -345,6 +345,7 @@ static BOOL generate_worker_command_line(struct thread_data *data,
 #define WORKER_CMD_LINE_FORMATTER_DEVICES     L" --devices %S"
 #define WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL L" --capture-from-all-devices"
 #define WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW L" --capture-from-new-devices"
+#define WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS L" --inject-descriptors"
 
     cmdLineLen = MultiByteToWideChar(CP_ACP, 0, data->device, -1, NULL, 0);
     cmdLineLen += (pipeName == NULL) ? strlen(data->filename) : wcslen(pipeName);
@@ -354,6 +355,7 @@ static BOOL generate_worker_command_line(struct thread_data *data,
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_DEVICES);
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL);
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
+    cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS);
     cmdLineLen += (data->address_list == NULL) ? 0 : strlen(data->address_list);
 
     cmdLine = (PWSTR)malloc(cmdLineLen * sizeof(WCHAR));
@@ -406,9 +408,17 @@ static BOOL generate_worker_command_line(struct thread_data *data,
                              cmdLineLen - nChars,
                              WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
     }
+
+    if (data->inject_descriptors)
+    {
+        nChars += swprintf_s(&cmdLine[nChars],
+                             cmdLineLen - nChars,
+                             WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS);
+    }
 #undef WORKER_CMD_LINE_FORMATTER_PIPE
 #undef WORKER_CMD_LINE_FORMATTER
 
+#undef WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL
 #undef WORKER_CMD_LINE_FORMATTER_DEVICES
@@ -584,6 +594,7 @@ int cmd_interactive(struct thread_data *data)
 
     data->filename = NULL;
     data->capture_all = TRUE;
+    data->inject_descriptors = TRUE;
 
     filters_initialize();
     if (usbpcapFilters[0] == NULL)
@@ -816,6 +827,12 @@ static void start_capture(struct thread_data *data)
         return;
     }
 
+    if (FALSE == USBPcapInitAddressFilter(&data->filter, data->address_list, data->capture_all))
+    {
+        fprintf(stderr, "USBPcapInitAddressFilter failed!\n");
+        return;
+    }
+
     data->exit_event = CreateEvent(NULL, /* Handle cannot be inherited */
                                    TRUE, /* Manual Reset */
                                    FALSE, /* Default to not signalled */
@@ -841,9 +858,12 @@ static void start_capture(struct thread_data *data)
                                              NULL);
         }
 
-        /* TODO: Make this configurable and only get descriptors from filtered devices */
-        data->descriptors.descriptors = descriptors_generate_pcap(data->device, &data->descriptors.descriptors_len);
-        data->descriptors.buf_written = 0;
+        if (data->inject_descriptors)
+        {
+            data->descriptors.descriptors = descriptors_generate_pcap(data->device, &data->descriptors.descriptors_len,
+                                                                      &data->filter);
+            data->descriptors.buf_written = 0;
+        }
 
         data->read_handle = create_filter_read_handle(data);
 
@@ -1139,6 +1159,9 @@ static int print_extcap_options(const char *device)
            "{display=Capture from newly connected devices}"
            "{tooltip=Automatically start capture on all newly connected devices}"
            "{type=boolflag}{default=true}\n");
+    printf("arg {number=4}{call=--inject-descriptors}"
+           "{display=Inject already connected devices descriptors into capture data}"
+           "{type=boolflag}{default=true}\n");
     printf("arg {number=%d}{call=--devices}{display=Attached USB Devices}{tooltip=Select individual devices to capture from}{type=multicheck}\n",
            EXTCAP_ARGNUM_MULTICHECK);
 
@@ -1305,6 +1328,8 @@ static void print_help(void)
            "  --devices <list>\n"
            "    Captures data only from devices with addresses present in list.\n"
            "    List is comma separated list of values. Example --devices 1,2,3.\n"
+           "  --inject-descriptors\n"
+           "    Inject already connected devices descriptors into capture data.\n"
            "  -I,  --init-non-standard-hwids\n"
            "    Initializes NonStandardHWIDs registry key used by USBPcapDriver.\n"
            "    This registry key is needed for USB 3.0 capture.\n");
@@ -1313,6 +1338,7 @@ static void print_help(void)
 /* Commandline arguments without short option */
 #define ARG_DEVICES                    900
 #define ARG_CAPTURE_FROM_NEW_DEVICES   901
+#define ARG_INJECT_DESCRIPTORS         902
 #define ARG_EXTCAP_VERSION            1000
 #define ARG_EXTCAP_INTERFACES         1001
 #define ARG_EXTCAP_INTERFACE          1002
@@ -1341,6 +1367,7 @@ int __cdecl main(int argc, CHAR **argv)
         {"devices", required_argument, 0, ARG_DEVICES},
         {"capture-from-all-devices", no_argument, 0, 'A'},
         {"capture-from-new-devices", no_argument, 0, ARG_CAPTURE_FROM_NEW_DEVICES},
+        {"inject-descriptors", no_argument, 0, ARG_INJECT_DESCRIPTORS},
         /* Extcap interface. Please note that there are no short
          * options for these and the numbers are just gopt keys.
          */
@@ -1363,6 +1390,7 @@ int __cdecl main(int argc, CHAR **argv)
     data.address_list = NULL;
     data.capture_all = FALSE;
     data.capture_new = FALSE;
+    data.inject_descriptors = FALSE;
     data.snaplen = 65535;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
@@ -1422,6 +1450,9 @@ int __cdecl main(int argc, CHAR **argv)
                 break;
             case ARG_CAPTURE_FROM_NEW_DEVICES:
                 data.capture_new = TRUE;
+                break;
+            case ARG_INJECT_DESCRIPTORS:
+                data.inject_descriptors = TRUE;
                 break;
             case ARG_EXTCAP_VERSION:
                 do_extcap_version = 1;

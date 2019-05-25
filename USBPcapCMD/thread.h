@@ -28,6 +28,7 @@ struct thread_data
     char *device;   /* Filter device object name */
     char *filename; /* Output filename */
     char *address_list; /* Comma separated list with addresses of device to capture. */
+    USBPCAP_ADDRESS_FILTER filter; /* Addresses that should be filtered */
     BOOLEAN capture_all; /* TRUE if all devices should be captured despite address_list. */
     BOOLEAN capture_new; /* TRUE if we should automatically capture from new devices. */
     UINT32 snaplen; /* Snapshot length */
@@ -39,6 +40,7 @@ struct thread_data
     HANDLE worker_process_thread; /* Handle to breakaway worker process main thread. */
     HANDLE exit_event; /* Handle to event that indicates that main thread should exit. */
 
+    BOOLEAN inject_descriptors; /* TRUE if descriptors should be injected into capture. */
     struct inject_descriptors descriptors;
 };
 

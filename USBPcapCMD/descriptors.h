@@ -7,7 +7,9 @@
 #ifndef USBPCAP_DESCRIPTORS_H
 #define USBPCAP_DESCRIPTORS_H
 
-void *descriptors_generate_pcap(const char *filter, int *pcap_length);
+#include "iocontrol.h"
+
+void *descriptors_generate_pcap(const char *filter, int *pcap_length, PUSBPCAP_ADDRESS_FILTER addresses);
 void descriptors_free_pcap(void *pcap);
 
 #endif /* USBPCAP_DESCRIPTORS_H */
