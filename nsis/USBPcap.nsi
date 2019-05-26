@@ -54,7 +54,7 @@ RequestExecutionLevel admin
 
   VIAddVersionKey "ProductName" "USBPcap"
   VIAddVersionKey "ProductVersion" "${VERSION}"
-  VIAddVersionKey "LegalCopyright" "(c) 2013-2018 Tomasz Mon"
+  VIAddVersionKey "LegalCopyright" "(c) 2013-2019 Tomasz Mon"
   VIAddVersionKey "FileDescription" "USBPcap installer"
   VIAddVersionKey "FileVersion" "${VERSION}"
   VIProductVersion "${VERSION}"

@@ -9,9 +9,9 @@
 #define USBPCAPCMD_VERSION_H
 
 #define USBPCAPCMD_VERSION_MAJOR    1
-#define USBPCAPCMD_VERSION_MINOR    2
+#define USBPCAPCMD_VERSION_MINOR    4
 #define USBPCAPCMD_VERSION_REVISION 0
-#define USBPCAPCMD_VERSION_BUILD    4
+#define USBPCAPCMD_VERSION_BUILD    0
 
 #define makeStr(x) #x
 #define makeString(x) makeStr(x)
