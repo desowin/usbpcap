@@ -1145,7 +1145,7 @@ static int print_extcap_options(const char *device)
 
     printf("arg {number=0}{call=--snaplen}"
            "{display=Snapshot length}{tooltip=Snapshot length}"
-           "{type=integer}{range=0,65535}{default=65535}\n");
+           "{type=unsigned}{default=65535}\n");
     printf("arg {number=1}{call=--bufferlen}"
            "{display=Capture buffer length}"
            "{tooltip=USBPcap kernel-mode capture buffer length in bytes}"
