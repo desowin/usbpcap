@@ -324,23 +324,12 @@ NTSTATUS DkTgtInDevCtlCompletion(PDEVICE_OBJECT pDevObj, PIRP pIrp, PVOID pCtx)
     pDevExt = (PDEVICE_EXTENSION) pDevObj->DeviceExtension;
 
     // URB is collected AFTER forward to bus driver or next lower object
-    if (NT_SUCCESS(status))
+    pStack = IoGetCurrentIrpStackLocation(pIrp);
+    pUrb = (PURB) pStack->Parameters.Others.Argument1;
+    if (pUrb != NULL)
     {
-        pStack = IoGetCurrentIrpStackLocation(pIrp);
-        pUrb = (PURB) pStack->Parameters.Others.Argument1;
-        if (pUrb != NULL)
-        {
-            USBPcapAnalyzeURB(pIrp, pUrb, TRUE,
-                              pDevExt->context.usb.pDeviceData);
-        }
-        else
-        {
-            DkDbgStr("Bus driver returned success but the result is NULL!");
-        }
-    }
-    else
-    {
-        DkDbgVal("Bus driver returned an error!", pIrp->IoStatus.Status);
+        USBPcapAnalyzeURB(pIrp, pUrb, TRUE,
+                          pDevExt->context.usb.pDeviceData);
     }
 
     IoReleaseRemoveLock(&pDevExt->removeLock, (PVOID) pIrp);
