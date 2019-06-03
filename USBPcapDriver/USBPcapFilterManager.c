@@ -54,6 +54,12 @@ static void USBPcapFreeDeviceData(IN PDEVICE_EXTENSION pDevExt)
             pDeviceData->endpointTable = NULL;
         }
 
+        if (pDeviceData->URBIrpTable != NULL)
+        {
+            USBPcapFreeURBIRPInfoTable(pDeviceData->URBIrpTable);
+            pDeviceData->URBIrpTable = NULL;
+        }
+
         if (pDeviceData->previousChildren != NULL)
         {
             ExFreePool((PVOID)pDeviceData->previousChildren);
@@ -155,8 +161,9 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
             }
         }
 
-        KeInitializeSpinLock(&pDeviceData->endpointTableSpinLock);
+        KeInitializeSpinLock(&pDeviceData->tablesSpinLock);
         pDeviceData->endpointTable = USBPcapInitializeEndpointTable(NULL);
+        pDeviceData->URBIrpTable = USBPcapInitializeURBIRPInfoTable(NULL);
 
         pDeviceData->descriptor = NULL;
     }

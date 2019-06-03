@@ -31,6 +31,8 @@ PWSTR USBPcapGetHubInterfaces(PDEVICE_OBJECT hub);
 BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address);
 BOOLEAN USBPcapSetDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address);
 
+LARGE_INTEGER USBPcapGetCurrentTimestamp(VOID);
+
 #ifdef ALLOC_PRAGMA
 #pragma alloc_text (PAGE, USBPcapGetTargetDevicePdo)
 #pragma alloc_text (PAGE, USBPcapGetNumberOfPorts)

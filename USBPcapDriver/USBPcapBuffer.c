@@ -6,6 +6,7 @@
 
 #include "USBPcapMain.h"
 #include "USBPcapBuffer.h"
+#include "USBPcapHelperFunctions.h"
 
 #define USBPCAP_BUFFER_TAG  (ULONG)'ffuB'
 
@@ -457,24 +458,12 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
 
 __inline static VOID
 USBPcapInitializePcapHeader(PUSBPCAP_ROOTHUB_DATA pData,
+                            LARGE_INTEGER timestamp,
                             pcaprec_hdr_t *pcapHeader,
                             UINT32 bytes)
 {
-    LARGE_INTEGER  time;
-
-#if (NTDDI_VERSION <= NTDDI_WIN7)
-    /*
-     * Updated approximately every ten milliseconds.
-     *
-     * TODO: Get higer precision timestamp.
-     */
-    KeQuerySystemTime(&time);
-#else
-    KeQuerySystemTimePrecise(&time);
-#endif
-
-    pcapHeader->ts_sec = (UINT32)(time.QuadPart/10000000-11644473600);
-    pcapHeader->ts_usec = (UINT32)((time.QuadPart%10000000)/10);
+    pcapHeader->ts_sec = (UINT32)(timestamp.QuadPart/10000000-11644473600);
+    pcapHeader->ts_usec = (UINT32)((timestamp.QuadPart%10000000)/10);
 
     /* Obey the snaplen limit */
     if (bytes > pData->snaplen)
@@ -488,9 +477,10 @@ USBPcapInitializePcapHeader(PUSBPCAP_ROOTHUB_DATA pData,
     pcapHeader->orig_len = bytes;
 }
 
-NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
-                                  PUSBPCAP_BUFFER_PACKET_HEADER header,
-                                  PVOID buffer)
+NTSTATUS USBPcapBufferWriteTimestampedPacket(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                             LARGE_INTEGER timestamp,
+                                             PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                             PVOID buffer)
 {
     UINT32             bytes;
     UINT32             bytesFree;
@@ -508,7 +498,7 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
 
     KeAcquireSpinLock(&pRootData->bufferLock, &irql);
 
-    USBPcapInitializePcapHeader(pRootData, &pcapHeader, bytes);
+    USBPcapInitializePcapHeader(pRootData, timestamp, &pcapHeader, bytes);
 
     /* pcapHeader.incl_len contains the number of bytes to write */
     bytes = pcapHeader.incl_len;
@@ -612,4 +602,12 @@ NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
     }
 
     return status;
+}
+
+NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                  PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                  PVOID buffer)
+{
+    LARGE_INTEGER timestamp = USBPcapGetCurrentTimestamp();
+    return USBPcapBufferWriteTimestampedPacket(pRootData, timestamp, header, buffer);
 }

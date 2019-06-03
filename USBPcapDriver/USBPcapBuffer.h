@@ -20,6 +20,10 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
                                     PDEVICE_EXTENSION pDevExt,
                                     PUINT32 pBytesRead);
 
+NTSTATUS USBPcapBufferWriteTimestampedPacket(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                             LARGE_INTEGER timestamp,
+                                             PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                             PVOID buffer);
 NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
                                   PUSBPCAP_BUFFER_PACKET_HEADER header,
                                   PVOID buffer);

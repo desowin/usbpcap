@@ -1025,3 +1025,20 @@ BOOLEAN USBPcapSetDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address)
     return TRUE;
 }
 
+LARGE_INTEGER USBPcapGetCurrentTimestamp(VOID)
+{
+    LARGE_INTEGER  timestamp;
+
+#if (NTDDI_VERSION <= NTDDI_WIN7)
+    /*
+     * Updated approximately every ten milliseconds.
+     *
+     * TODO: Get higer precision timestamp.
+     */
+    KeQuerySystemTime(&timestamp);
+#else
+    KeQuerySystemTimePrecise(&timestamp);
+#endif
+
+    return timestamp;
+}

@@ -35,4 +35,29 @@ BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_DEVICE_DATA pDeviceData,
                                     IN USBD_PIPE_HANDLE handle,
                                     PUSBPCAP_ENDPOINT_INFO pInfo);
 
+typedef struct _USBPCAP_URB_IRP_INFO
+{
+    /* IRP pointer is used as a key */
+    PIRP          irp;
+    /* Data collected when the URB was travelling from FDO to PDO */
+    LARGE_INTEGER timestamp;
+    USBD_STATUS   status;
+    USHORT        function;
+    UCHAR         info;      /* I/O Request info */
+    USHORT        bus;       /* bus (RootHub) number */
+    USHORT        device;    /* device address */
+} USBPCAP_URB_IRP_INFO, *PUSBPCAP_URB_IRP_INFO;
+
+VOID USBPcapRemoveURBIRPInfo(IN PRTL_GENERIC_TABLE table,
+                             IN PIRP irp);
+VOID USBPcapAddURBIRPInfo(IN PRTL_GENERIC_TABLE table,
+                          IN PUSBPCAP_URB_IRP_INFO irpinfo);
+
+VOID USBPcapFreeURBIRPInfoTable(IN PRTL_GENERIC_TABLE table);
+PRTL_GENERIC_TABLE USBPcapInitializeURBIRPInfoTable(IN PVOID context);
+
+BOOLEAN USBPcapObtainURBIRPInfo(IN PUSBPCAP_DEVICE_DATA pDeviceData,
+                                IN PIRP irp,
+                                PUSBPCAP_URB_IRP_INFO pInfo);
+
 #endif /* USBPCAP_TABLES_H */

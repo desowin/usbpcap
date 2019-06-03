@@ -179,14 +179,14 @@ BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_DEVICE_DATA pDeviceData,
     PUSBPCAP_ENDPOINT_INFO info;
     BOOLEAN found = FALSE;
 
-    KeAcquireSpinLock(&pDeviceData->endpointTableSpinLock, &irql);
+    KeAcquireSpinLock(&pDeviceData->tablesSpinLock, &irql);
     info = USBPcapGetEndpointInfo(pDeviceData->endpointTable, handle);
     if (info != NULL)
     {
         found = TRUE;
         memcpy(pInfo, info, sizeof(USBPCAP_ENDPOINT_INFO));
     }
-    KeReleaseSpinLock(&pDeviceData->endpointTableSpinLock, irql);
+    KeReleaseSpinLock(&pDeviceData->tablesSpinLock, irql);
 
     if (found == TRUE)
     {
@@ -198,6 +198,166 @@ BOOLEAN USBPcapRetrieveEndpointInfo(IN PUSBPCAP_DEVICE_DATA pDeviceData,
     else
     {
         DkDbgVal("Unable to find endpoint info", handle);
+    }
+
+    return found;
+}
+
+
+typedef struct _USBPCAP_INTERNAL_URB_IRP_INFO
+{
+    RTL_SPLAY_LINKS        links;
+    LIST_ENTRY             entry;
+    USBPCAP_URB_IRP_INFO   info;
+} USBPCAP_INTERNAL_URB_IRP_INFO, *PUSBPCAP_INTERNAL_URB_IRP_INFO;
+
+VOID USBPcapRemoveURBIRPInfo(IN PRTL_GENERIC_TABLE table,
+                             IN PIRP irp)
+{
+    USBPCAP_INTERNAL_URB_IRP_INFO   info;
+    BOOLEAN                         deleted;
+
+    info.info.irp = irp;
+
+    deleted = RtlDeleteElementGenericTable(table, &info);
+
+    if (deleted == TRUE)
+    {
+        DkDbgVal("Successfully removed irp from table", irp);
+    }
+}
+
+VOID USBPcapAddURBIRPInfo(IN PRTL_GENERIC_TABLE table,
+                          IN PUSBPCAP_URB_IRP_INFO irpinfo)
+{
+    USBPCAP_INTERNAL_URB_IRP_INFO   info;
+    BOOLEAN                         new;
+
+    info.info = *irpinfo;
+
+    RtlInsertElementGenericTable(table,
+                                 (PVOID)&info,
+                                 sizeof(USBPCAP_INTERNAL_URB_IRP_INFO),
+                                 &new);
+
+    if (new == FALSE)
+    {
+        DkDbgVal("Element already exists in table", irpinfo.irp);
+    }
+}
+
+static PUSBPCAP_URB_IRP_INFO
+USBPcapGetURBIRPInfo(IN PRTL_GENERIC_TABLE table,
+                     IN PIRP irp)
+{
+    PUSBPCAP_INTERNAL_URB_IRP_INFO  pInfo;
+    USBPCAP_INTERNAL_URB_IRP_INFO   info;
+
+    info.info.irp = irp;
+
+    pInfo = RtlLookupElementGenericTable(table, &info);
+
+    if (pInfo == NULL)
+    {
+        return NULL;
+    }
+
+    return &pInfo->info;
+}
+
+VOID USBPcapFreeURBIRPInfoTable(IN PRTL_GENERIC_TABLE table)
+{
+    PVOID element;
+
+    DkDbgStr("Free URB irp data");
+
+    /* Delete all the elements from table */
+    while (NULL != (element = RtlGetElementGenericTable(table, 0)))
+    {
+        RtlDeleteElementGenericTable(table, element);
+    }
+
+    /* Delete table structure */
+    ExFreePool(table);
+}
+
+RTL_GENERIC_COMPARE_ROUTINE USBPcapCompareURBIRPInfo;
+static RTL_GENERIC_COMPARE_RESULTS
+USBPcapCompareURBIRPInfo(IN PRTL_GENERIC_TABLE table,
+                         IN PVOID first,
+                         IN PVOID second)
+{
+    PUSBPCAP_INTERNAL_URB_IRP_INFO left = first;
+    PUSBPCAP_INTERNAL_URB_IRP_INFO right = second;
+
+    if (left->info.irp < right->info.irp)
+    {
+        return GenericLessThan;
+    }
+    else if (left->info.irp == right->info.irp)
+    {
+        return GenericEqual;
+    }
+    else
+    {
+        return GenericGreaterThan;
+    }
+}
+
+PRTL_GENERIC_TABLE USBPcapInitializeURBIRPInfoTable(IN PVOID context)
+{
+    PRTL_GENERIC_TABLE table;
+
+    DkDbgStr("Initialize URB irp table");
+
+    table = (PRTL_GENERIC_TABLE)
+                ExAllocatePoolWithTag(NonPagedPool,
+                                      sizeof(RTL_GENERIC_TABLE),
+                                      USBPCAP_TABLE_TAG);
+
+    if (table == NULL)
+    {
+        DkDbgStr("Unable to allocate URB irp table");
+        return table;
+    }
+
+    RtlInitializeGenericTable(table,
+                              USBPcapCompareURBIRPInfo,
+                              USBPcapAllocateRoutine,
+                              USBPcapFreeRoutine,
+                              context);
+
+    return table;
+}
+
+/* Obtains the URB IRP info from the URB IRP info table
+ *
+ * If the value was present in the table, it will be removed.
+ *
+ * Returns TRUE if irp was found in table, FALSE otherwise.
+ */
+BOOLEAN USBPcapObtainURBIRPInfo(IN PUSBPCAP_DEVICE_DATA pDeviceData,
+                                IN PIRP irp,
+                                PUSBPCAP_URB_IRP_INFO pInfo)
+{
+    KIRQL irql;
+    PUSBPCAP_URB_IRP_INFO info;
+    BOOLEAN found = FALSE;
+
+    KeAcquireSpinLock(&pDeviceData->tablesSpinLock, &irql);
+    info = USBPcapGetURBIRPInfo(pDeviceData->URBIrpTable, irp);
+    if (info != NULL)
+    {
+        found = TRUE;
+        memcpy(pInfo, info, sizeof(USBPCAP_URB_IRP_INFO));
+        USBPcapRemoveURBIRPInfo(pDeviceData->URBIrpTable, irp);
+    }
+    KeReleaseSpinLock(&pDeviceData->tablesSpinLock, irql);
+
+    if (found == TRUE)
+    {
+        DkDbgVal("Found URB irp info", irp);
+        DkDbgVal("", pInfo->function);
     }
 
     return found;

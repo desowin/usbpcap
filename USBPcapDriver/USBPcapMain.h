@@ -74,8 +74,10 @@ typedef struct _DEVICE_DATA
     BOOLEAN                isHub; /* TRUE if device is hub */
 
     USHORT                 deviceAddress;
-    KSPIN_LOCK             endpointTableSpinLock;
+
+    KSPIN_LOCK             tablesSpinLock;
     PRTL_GENERIC_TABLE     endpointTable;
+    PRTL_GENERIC_TABLE     URBIrpTable;
 
     PUSBPCAP_ROOTHUB_DATA  pRootData;
 
