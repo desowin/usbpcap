@@ -32,6 +32,7 @@ echo .Set CabinetNameTemplate=USBPcap-%_USBPCAP_VERSION%-%1.cab
 echo .Set DestinationDir=Windows10%1
 echo %~dp0Release\Windows8\%1\USBPcap.inf
 echo %~dp0Release\Windows8\%1\USBPcap.sys
+echo %~dp0Release\Windows8\%1\USBPcap.pdb
 ) > Windows10-%1.ddf
 MakeCab /f Windows10-%1.ddf
 Goto :eof

@@ -10,7 +10,7 @@ if "%1"=="x86" (
 ) else (
     set USBPcap_catalog=USBPcapamd64.cat
     set USBPcap_OS=8_X64
-    set USBPcap_builddir=x64\Win8Release\dirs-Package
+    set USBPcap_builddir=USBPcapDriver\Win8Release\x64
 )
 
 cd %~dp0
@@ -38,6 +38,7 @@ exit /B 1
 
 :end
 copy %USBPcap_builddir%\USBPcap.sys %2
+copy %USBPcap_builddir%\USBPcap.pdb %2
 copy %USBPcap_builddir%\USBPcap.inf %2
 copy %USBPcap_builddir%\%USBPcap_catalog% %2
 %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% %2\%USBPcap_catalog%

@@ -57,6 +57,7 @@ exit /B 1
 :end
 
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.sys %3
+copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.pdb %3
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\USBPcap.inf %3
 copy USBPcapDriver\obj%BUILD_ALT_DIR%\%USBPcap_arch%\%USBPcap_catalog% %3
 %_USBPCAP_SIGNTOOL% %_USBPCAP_SIGN_OPTS_SHA1% %3\%USBPcap_catalog%
