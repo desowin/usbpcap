@@ -731,8 +731,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             PUSBPCAP_BUFFER_ISOCH_HEADER  packetHeader;
             PVOID                         transferBuffer;
             PUCHAR                        compactedBuffer;
-            ULONG                         compactedOffset;
-            ULONG                         compactedLength;
+            PVOID                         captureBuffer;
             USHORT                        headerLen;
             ULONG                         i;
 
@@ -794,85 +793,97 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             packetHeader->header.transfer = USBPCAP_TRANSFER_ISOCHRONOUS;
 
+            /* Default to no data, will be changed later if data is to be attached to packet */
+            packetHeader->header.dataLength = 0;
+            compactedBuffer = NULL;
+            transferBuffer = NULL;
+            captureBuffer = NULL;
+
+            /* Copy the packet headers untouched */
+            for (i = 0; i < transfer->NumberOfPackets; i++)
+            {
+                packetHeader->packet[i].offset = transfer->IsoPacket[i].Offset;
+                packetHeader->packet[i].length = transfer->IsoPacket[i].Length;
+                packetHeader->packet[i].status = transfer->IsoPacket[i].Status;
+            }
+
             /* For inbound isoch transfers (post), transfer->TransferBufferLength reflects the actual
              * number of bytes received. Rather than copying the entire transfer buffer (which may have
              * empty gaps), we will compact the data, copying only the packets that contain data.
              */
-
-            compactedLength = 0;
-            if ((transfer->TransferBufferLength != 0) &&
-                (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_IN) && (post == TRUE)) ||
-                (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_OUT) && (post == FALSE)))
+            if (transfer->TransferBufferLength != 0)
             {
-                /* Compute the compacted transfer length by summing up the individual packet lengths */
-                for (i = 0; i < transfer->NumberOfPackets; i++)
-                {
-                    compactedLength += transfer->IsoPacket[i].Length;
-                }
-            }
-
-            if (compactedLength > transfer->TransferBufferLength)
-            {
-                /* This is a safety check -- the numbers don't add up (this should never happen) */
-                DkDbgStr("Sum of Isochronous transfer packet lengths exceeds transfer buffer length");
-                ExFreePool((PVOID)packetHeader);
-                break;
-            }
-
-            if (compactedLength == 0)
-            {
-                /* No data was transferred */
-                packetHeader->header.dataLength = 0;
-                compactedBuffer = NULL;
-
-                /* Copy the packet headers untouched */
-                for (i = 0; i < transfer->NumberOfPackets; i++)
-                {
-                    packetHeader->packet[i].offset = transfer->IsoPacket[i].Offset;
-                    packetHeader->packet[i].length = transfer->IsoPacket[i].Length;
-                    packetHeader->packet[i].status = transfer->IsoPacket[i].Status;
-                }
-            }
-            else
-            {
-                /* Compact the data to minimize the capture size */
-                packetHeader->header.dataLength = (UINT32)compactedLength;
-
-                /* Allocate a buffer for the compacted results */
-                /* The original data must remain untouched */
-                compactedBuffer = ExAllocatePoolWithTag(NonPagedPool,
-                    (SIZE_T)compactedLength,
-                        'COSI');
-
-                if (compactedBuffer == NULL)
-                {
-                    DkDbgStr("Insufficient resources for isochronous transfer");
-                    ExFreePool((PVOID)packetHeader);
-                    break;
-                }
-
                 transferBuffer =
-                    USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
-                                               transfer->TransferBuffer,
-                                               transfer->TransferBufferMDL);
+                        USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
+                                                   transfer->TransferBuffer,
+                                                   transfer->TransferBufferMDL);
 
-                /* Loop through all the isoch packets in the transfer buffer */
-                /* Copy data from transfer buffer to compacted buffer, removing empty gaps */
-                compactedOffset = 0;
-                for (i = 0; i < transfer->NumberOfPackets; i++)
+                if (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_IN) && (post == TRUE))
                 {
-                    /* Copy the packet header, adjusting the offsets */
-                    packetHeader->packet[i].offset = compactedOffset;
-                    packetHeader->packet[i].length = transfer->IsoPacket[i].Length;
-                    packetHeader->packet[i].status = transfer->IsoPacket[i].Status;
+                    ULONG  compactedOffset;
+                    ULONG  compactedLength;
 
-                    if (transfer->IsoPacket[i].Length > 0)
+                    compactedLength = 0;
+
+                    /* Compute the compacted transfer length by summing up the individual packet lengths */
+                    for (i = 0; i < transfer->NumberOfPackets; i++)
                     {
-                        RtlCopyMemory((PVOID)(compactedBuffer + compactedOffset),
-                            (PVOID)((PUCHAR)transferBuffer + transfer->IsoPacket[i].Offset),
-                            transfer->IsoPacket[i].Length);
-                        compactedOffset += transfer->IsoPacket[i].Length;
+                        compactedLength += transfer->IsoPacket[i].Length;
                     }
+
+                    if (compactedLength > transfer->TransferBufferLength)
+                    {
+                        /* This is a safety check -- the numbers don't add up (this should never happen) */
+                        DkDbgStr("Sum of Isochronous transfer packet lengths exceeds transfer buffer length");
+                        ExFreePool((PVOID)packetHeader);
+                        break;
+                    }
+
+                    /* Compact the data to minimize the capture size */
+                    packetHeader->header.dataLength = (UINT32)compactedLength;
+
+                    /* Allocate a buffer for the compacted results */
+                    /* The original data must remain untouched */
+                    compactedBuffer = ExAllocatePoolWithTag(NonPagedPool,
+                        (SIZE_T)compactedLength,
+                            'COSI');
+
+                    if (compactedBuffer == NULL)
+                    {
+                        DkDbgStr("Insufficient resources for isochronous transfer");
+                        ExFreePool((PVOID)packetHeader);
+                        break;
+                    }
+
+                    /* Loop through all the isoch packets in the transfer buffer */
+                    /* Copy data from transfer buffer to compacted buffer, removing empty gaps */
+                    compactedOffset = 0;
+                    for (i = 0; i < transfer->NumberOfPackets; i++)
+                    {
+                        /* Copy the packet header, adjusting the offsets */
+                        packetHeader->packet[i].offset = compactedOffset;
+                        packetHeader->packet[i].length = transfer->IsoPacket[i].Length;
+                        packetHeader->packet[i].status = transfer->IsoPacket[i].Status;
+
+                        if (transfer->IsoPacket[i].Length > 0)
+                        {
+                            RtlCopyMemory((PVOID)(compactedBuffer + compactedOffset),
+                                (PVOID)((PUCHAR)transferBuffer + transfer->IsoPacket[i].Offset),
+                                transfer->IsoPacket[i].Length);
+                            compactedOffset += transfer->IsoPacket[i].Length;
+                        }
+                    }
+
+                    captureBuffer = compactedBuffer;
+                }
+                else if (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_OUT) && (post == FALSE))
+                {
+                    captureBuffer = transferBuffer;
+                    packetHeader->header.dataLength = transfer->TransferBufferLength;
+                }
+                else
+                {
+                    /* Do not capture transfer buffer now */
                 }
             }
 
@@ -882,7 +893,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
 
             USBPcapBufferWritePacket(pDeviceData->pRootData,
                                      (PUSBPCAP_BUFFER_PACKET_HEADER)packetHeader,
-                                     compactedBuffer);
+                                     captureBuffer);
 
             if (compactedBuffer)
                 ExFreePool((PVOID)compactedBuffer);
