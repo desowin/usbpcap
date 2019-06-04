@@ -175,7 +175,19 @@ USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
                               PIRP pIrp,
                               BOOLEAN post)
 {
+    BOOLEAN                        transferIn;
     USBPCAP_BUFFER_CONTROL_HEADER  packetHeader;
+
+    if (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN)
+    {
+        /* From device to host */
+        transferIn = TRUE;
+    }
+    else
+    {
+        /* From host to device */
+        transferIn = FALSE;
+    }
 
     packetHeader.header.headerLen = sizeof(USBPCAP_BUFFER_CONTROL_HEADER);
     packetHeader.header.irpId     = (UINT64) pIrp;
@@ -190,7 +202,7 @@ USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
     packetHeader.header.bus      = pDeviceData->pRootData->busId;
     packetHeader.header.device   = pDeviceData->deviceAddress;
 
-    if (transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN)
+    if (transferIn)
     {
         packetHeader.header.endpoint = 0x80;
     }
@@ -236,23 +248,55 @@ USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
     }
 
     /* Add Data stage to log */
-    if (transfer->TransferBufferLength != 0 &&
-        ((((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_IN) && (post == TRUE)) ||
-         (((transfer->TransferFlags & USBD_TRANSFER_DIRECTION_IN) == USBD_TRANSFER_DIRECTION_OUT) && (post == FALSE))))
+    if (transfer->TransferBufferLength != 0)
     {
-        PVOID  transferBuffer;
+        if ((submitInfo != NULL) && !transferIn)
+        {
+            /* Even though the IRP is on its way back now, record the data here.
+             * The buffer shouldn't have been modified during its journey down
+             * the stack.
+             */
+            PVOID                          transferBuffer;
+            USBPCAP_BUFFER_CONTROL_HEADER  dataHeader;
 
-        packetHeader.header.dataLength = (UINT32)transfer->TransferBufferLength;
-        packetHeader.stage = USBPCAP_CONTROL_STAGE_DATA;
+            transferBuffer =
+                USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
+                                           transfer->TransferBuffer,
+                                           transfer->TransferBufferMDL);
 
-        transferBuffer =
-            USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
-                                       transfer->TransferBuffer,
-                                       transfer->TransferBufferMDL);
+            dataHeader.header.headerLen  = sizeof(USBPCAP_BUFFER_CONTROL_HEADER);
+            dataHeader.header.irpId      = (UINT64) pIrp;
+            dataHeader.header.status     = submitInfo->status;
+            dataHeader.header.function   = submitInfo->function;
+            dataHeader.header.info       = submitInfo->info;
+            dataHeader.header.bus        = submitInfo->bus;
+            dataHeader.header.device     = submitInfo->device;
+            dataHeader.header.endpoint   = packetHeader.header.endpoint;
+            dataHeader.header.transfer   = USBPCAP_TRANSFER_CONTROL;
+            dataHeader.header.dataLength = (UINT32)transfer->TransferBufferLength;
+            dataHeader.stage             = USBPCAP_CONTROL_STAGE_DATA;
 
-        USBPcapBufferWritePacket(pDeviceData->pRootData,
-                                 (PUSBPCAP_BUFFER_PACKET_HEADER)&packetHeader,
-                                 transferBuffer);
+            USBPcapBufferWriteTimestampedPacket(pDeviceData->pRootData,
+                                                submitInfo->timestamp,
+                                                (PUSBPCAP_BUFFER_PACKET_HEADER)&dataHeader,
+                                                transferBuffer);
+        }
+        else if ((transferIn && (post == TRUE)) || (!transferIn && (post == FALSE)))
+        {
+            PVOID  transferBuffer;
+
+            packetHeader.header.dataLength = (UINT32)transfer->TransferBufferLength;
+            packetHeader.stage = USBPCAP_CONTROL_STAGE_DATA;
+
+            transferBuffer =
+                USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
+                                           transfer->TransferBuffer,
+                                           transfer->TransferBufferMDL);
+
+            USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                     (PUSBPCAP_BUFFER_PACKET_HEADER)&packetHeader,
+                                     transferBuffer);
+        }
     }
 
     /* Add Handshake stage to log when on its way from PDO to FDO */
