@@ -202,13 +202,29 @@ USBPcapAnalyzeControlTransfer(struct _URB_CONTROL_TRANSFER* transfer,
     packetHeader.header.bus      = pDeviceData->pRootData->busId;
     packetHeader.header.device   = pDeviceData->deviceAddress;
 
-    if (transferIn)
+    packetHeader.header.endpoint = 0;
+    if ((transfer->TransferFlags & USBD_DEFAULT_PIPE_TRANSFER) ||
+        (transfer->PipeHandle == NULL))
     {
-        packetHeader.header.endpoint = 0x80;
+        /* Transfer to default control endpoint 0 */
     }
     else
     {
-        packetHeader.header.endpoint = 0;
+        USBPCAP_ENDPOINT_INFO                   info;
+        BOOLEAN                                 epFound;
+
+        epFound = USBPcapRetrieveEndpointInfo(pDeviceData,
+                                              transfer->PipeHandle,
+                                              &info);
+        if (epFound == TRUE)
+        {
+            packetHeader.header.endpoint = info.endpointAddress;
+        }
+    }
+
+    if (transferIn)
+    {
+        packetHeader.header.endpoint |= 0x80;
     }
 
     packetHeader.header.transfer = USBPCAP_TRANSFER_CONTROL;
