@@ -693,8 +693,8 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
                 packetHeader.transfer = USBPCAP_TRANSFER_BULK;
             }
 
-            /* For IN endpoints, only add to log when post = TRUE,
-             * For OUT endpoints, only add to log when post = FALSE
+            /* For IN endpoints, add data to log only when post = TRUE,
+             * For OUT endpoints, add data to log only when post = FALSE
              */
             if (((packetHeader.endpoint & 0x80) && (post == TRUE)) ||
                 (!(packetHeader.endpoint & 0x80) && (post == FALSE)))
@@ -705,11 +705,17 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
                     USBPcapURBGetBufferPointer(transfer->TransferBufferLength,
                                                transfer->TransferBuffer,
                                                transfer->TransferBufferMDL);
-
-                USBPcapBufferWritePacket(pDeviceData->pRootData,
-                                         &packetHeader,
-                                         transferBuffer);
             }
+            else
+            {
+                packetHeader.dataLength = 0;
+                transferBuffer = NULL;
+            }
+
+            USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                     &packetHeader,
+                                     transferBuffer);
+
             DkDbgVal("", transfer->TransferFlags);
             DkDbgVal("", transfer->TransferBufferLength);
             DkDbgVal("", transfer->TransferBuffer);
