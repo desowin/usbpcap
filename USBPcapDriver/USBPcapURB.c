@@ -907,6 +907,57 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             break;
         }
 
+        case URB_FUNCTION_SYNC_RESET_PIPE_AND_CLEAR_STALL:
+        case URB_FUNCTION_SYNC_RESET_PIPE:
+        case URB_FUNCTION_SYNC_CLEAR_STALL:
+        case URB_FUNCTION_ABORT_PIPE:
+#if (_WIN32_WINNT >= 0x0602)
+        case URB_FUNCTION_CLOSE_STATIC_STREAMS:
+#endif
+        {
+            struct _URB_PIPE_REQUEST      *request;
+            USBPCAP_BUFFER_PACKET_HEADER   packetHeader;
+            USBPCAP_ENDPOINT_INFO          info;
+            BOOLEAN                        epFound;
+
+            packetHeader.headerLen  = sizeof(USBPCAP_BUFFER_PACKET_HEADER);
+            packetHeader.irpId      = (UINT64) pIrp;
+            packetHeader.status     = header->Status;
+            packetHeader.function   = header->Function;
+            packetHeader.info       = 0;
+            if (post == TRUE)
+            {
+                packetHeader.info |= USBPCAP_INFO_PDO_TO_FDO;
+            }
+            packetHeader.bus        = pDeviceData->pRootData->busId;
+            packetHeader.transfer   = USBPCAP_TRANSFER_IRP_INFO;
+            packetHeader.dataLength = 0;
+
+            request = (struct _URB_PIPE_REQUEST*)pUrb;
+
+            DkDbgVal("URB PIPE REQUEST", request->PipeHandle);
+            epFound = USBPcapRetrieveEndpointInfo(pDeviceData,
+                                                  request->PipeHandle,
+                                                  &info);
+            if (epFound == TRUE)
+            {
+                packetHeader.device = info.deviceAddress;
+                packetHeader.endpoint = info.endpointAddress;
+            }
+            else
+            {
+                packetHeader.device = pDeviceData->deviceAddress;
+                packetHeader.endpoint = 0xFF;
+                packetHeader.transfer = USBPCAP_TRANSFER_UNKNOWN;
+            }
+
+
+            USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                     &packetHeader,
+                                     NULL);
+            break;
+        }
+
         default:
         {
             if (post == FALSE)

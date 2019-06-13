@@ -86,6 +86,7 @@ typedef struct pcaprec_hdr_s {
 #define USBPCAP_TRANSFER_INTERRUPT   1
 #define USBPCAP_TRANSFER_CONTROL     2
 #define USBPCAP_TRANSFER_BULK        3
+#define USBPCAP_TRANSFER_IRP_INFO    0xFE
 #define USBPCAP_TRANSFER_UNKNOWN     0xFF
 
 /* info byte fields:
