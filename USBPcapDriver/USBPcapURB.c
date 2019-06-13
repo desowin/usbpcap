@@ -688,7 +688,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else
             {
-                packetHeader.device = 0xFFFF;
+                packetHeader.device = pDeviceData->deviceAddress;
                 packetHeader.endpoint = 0xFF;
                 packetHeader.transfer = USBPCAP_TRANSFER_BULK;
             }
@@ -794,7 +794,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             }
             else
             {
-                packetHeader->header.device = 0xFFFF;
+                packetHeader->header.device = pDeviceData->deviceAddress;
                 packetHeader->header.endpoint = 0xFF;
             }
             packetHeader->header.transfer = USBPCAP_TRANSFER_ISOCHRONOUS;
