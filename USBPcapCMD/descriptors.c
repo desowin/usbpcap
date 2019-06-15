@@ -216,28 +216,31 @@ static void write_setup_packet(descriptor_callback_context *ctx,
     add_to_list(ctx, data, data_len);
 }
 
-static void write_data_packet(descriptor_callback_context *ctx,
-                              USHORT function,
-                              USHORT deviceAddress,
-                              void *payload,
-                              int payload_length,
-                              BOOL out)
+static void write_complete_packet(descriptor_callback_context *ctx,
+                                  USHORT function,
+                                  USHORT deviceAddress,
+                                  void *payload,
+                                  int payload_length,
+                                  BOOL out)
 {
     int data_len = sizeof(USBPCAP_BUFFER_CONTROL_HEADER) + payload_length;
     UINT8 *data = (UINT8*)malloc(data_len);
     PUSBPCAP_BUFFER_CONTROL_HEADER hdr = (PUSBPCAP_BUFFER_CONTROL_HEADER)data;
 
     initialize_control_header(hdr, ctx->roothub, deviceAddress, payload_length,
-                              USBPCAP_CONTROL_STAGE_DATA, function, TRUE, out);
-    memcpy(&data[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)], payload, payload_length);
+                              USBPCAP_CONTROL_STAGE_COMPLETE, function, TRUE, out);
+    if (payload_length > 0)
+    {
+        memcpy(&data[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)], payload, payload_length);
+    }
 
     add_to_list(ctx, data, data_len);
 }
 
 static void
-write_device_descriptor_data(descriptor_callback_context *ctx,
-                             USHORT deviceAddress,
-                             PUSB_DEVICE_DESCRIPTOR descriptor)
+write_device_descriptor_complete(descriptor_callback_context *ctx,
+                                 USHORT deviceAddress,
+                                 PUSB_DEVICE_DESCRIPTOR descriptor)
 {
     int data_len = sizeof(USBPCAP_BUFFER_CONTROL_HEADER) + 18;
     UINT8 *data = (UINT8*)malloc(data_len);
@@ -245,7 +248,7 @@ write_device_descriptor_data(descriptor_callback_context *ctx,
     UINT8 *payload = &data[sizeof(USBPCAP_BUFFER_CONTROL_HEADER)];
 
     initialize_control_header(hdr, ctx->roothub, deviceAddress, 18,
-                              USBPCAP_CONTROL_STAGE_DATA,
+                              USBPCAP_CONTROL_STAGE_COMPLETE,
                               URB_CONTROL_TRANSFER,
                               TRUE, FALSE);
     payload[0] = descriptor->bLength;
@@ -270,21 +273,6 @@ write_device_descriptor_data(descriptor_callback_context *ctx,
     add_to_list(ctx, data, data_len);
 }
 
-static void write_status_packet(descriptor_callback_context *ctx,
-                                USHORT function,
-                                USHORT deviceAddress, BOOL out)
-{
-    int data_len = sizeof(USBPCAP_BUFFER_CONTROL_HEADER);
-    UINT8 *data = (UINT8*)malloc(data_len);
-    PUSBPCAP_BUFFER_CONTROL_HEADER hdr = (PUSBPCAP_BUFFER_CONTROL_HEADER)data;
-
-    initialize_control_header(hdr, ctx->roothub, deviceAddress, 0,
-                              USBPCAP_CONTROL_STAGE_STATUS,
-                              function, TRUE, out);
-
-    add_to_list(ctx, data, data_len);
-}
-
 static void
 descriptor_callback(HANDLE hub, ULONG port, USHORT deviceAddress,
                     PUSB_DEVICE_DESCRIPTOR desc, void *context)
@@ -300,8 +288,7 @@ descriptor_callback(HANDLE hub, ULONG port, USHORT deviceAddress,
     write_setup_packet(ctx, URB_GET_DESCRIPTOR_FROM_DEVICE,
                        deviceAddress, 0x80, 6,
                        USB_DEVICE_DESCRIPTOR_TYPE << 8, 0, 18, FALSE);
-    write_device_descriptor_data(ctx, deviceAddress, desc);
-    write_status_packet(ctx, URB_CONTROL_TRANSFER, deviceAddress, FALSE);
+    write_device_descriptor_complete(ctx, deviceAddress, desc);
 
     request = get_config_descriptor(hub, port, 0);
     if (request)
@@ -317,16 +304,15 @@ descriptor_callback(HANDLE hub, ULONG port, USHORT deviceAddress,
                            request->SetupPacket.wLength,
                            FALSE);
 
-        write_data_packet(ctx, URB_CONTROL_TRANSFER,
-                          deviceAddress, request->Data,
-                          request->SetupPacket.wLength, FALSE);
-
-        write_status_packet(ctx, URB_CONTROL_TRANSFER, deviceAddress, FALSE);
+        write_complete_packet(ctx, URB_CONTROL_TRANSFER,
+                              deviceAddress, request->Data,
+                              request->SetupPacket.wLength, FALSE);
 
         /* SET CONFIGURATION */
         write_setup_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress,
                            0x00, 9, config->bConfigurationValue, 0, 0, TRUE);
-        write_status_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress, TRUE);
+        write_complete_packet(ctx, URB_SELECT_CONFIGURATION, deviceAddress,
+                              NULL, 0, TRUE);
     }
     free(request);
 }
