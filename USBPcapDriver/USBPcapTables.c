@@ -242,7 +242,7 @@ VOID USBPcapAddURBIRPInfo(IN PRTL_GENERIC_TABLE table,
 
     if (new == FALSE)
     {
-        DkDbgVal("Element already exists in table", irpinfo.irp);
+        DkDbgVal("Element already exists in table", irpinfo->irp);
     }
 }
 
