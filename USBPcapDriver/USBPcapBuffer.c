@@ -532,17 +532,21 @@ USBPcapInitializePcapHeader(PUSBPCAP_ROOTHUB_DATA pData,
     pcapHeader->orig_len = bytes;
 }
 
-/* Caller must hold bufferLock */
+/* Caller must hold bufferLock
+ *
+ * payloadEntries is array of USBPCAP_PAYLOAD_ENTRY with the last element being {0, NULL}
+ */
 static NTSTATUS
 USBPcapBufferStorePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
                          LARGE_INTEGER timestamp,
                          PUSBPCAP_BUFFER_PACKET_HEADER header,
-                         PVOID buffer)
+                         PUSBPCAP_PAYLOAD_ENTRY payloadEntries)
 {
     UINT32             bytes;
     UINT32             bytesFree;
     UINT32             tmp;
     pcaprec_hdr_t      pcapHeader;
+    int                i;
 
     bytes = header->headerLen + header->dataLength;
 
@@ -551,12 +555,21 @@ USBPcapBufferStorePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
     /* pcapHeader.incl_len contains the number of bytes to write */
     bytes = pcapHeader.incl_len;
 
-    /* Sanity check buffer */
-    if ((bytes > sizeof(pcaprec_hdr_t) + header->headerLen) &&
-        buffer == NULL)
+    /* Sanity check payload entries */
+    if (bytes > (sizeof(pcaprec_hdr_t) + header->headerLen))
     {
-        DkDbgStr("Attempted to write invalid packet.");
-        return STATUS_INVALID_PARAMETER;
+        UINT32 bytesMissing = bytes - (sizeof(pcaprec_hdr_t) + header->headerLen);
+
+        for (i = 0; (bytesMissing > 0) && (payloadEntries[i].buffer); i++)
+        {
+            bytesMissing -= min(payloadEntries[i].size, bytesMissing);
+        }
+        if (bytesMissing > 0)
+        {
+            DkDbgVal("Attempted to write invalid packet. Missing %d bytes of payload.",
+                     bytesMissing);
+            return STATUS_INVALID_PARAMETER;
+        }
     }
 
     bytesFree = USBPcapGetBufferFree(pRootData);
@@ -584,27 +597,29 @@ USBPcapBufferStorePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
     }
     bytes -= tmp;
 
-    if (buffer != NULL && bytes > 0 && header->dataLength > 0)
+    /* Write payload entries */
+    for (i = 0; (bytes > 0) && (payloadEntries[i].buffer); i++)
     {
-        /* Write data */
-        tmp = min(bytes, header->dataLength);
+        tmp = min(bytes, payloadEntries[i].size);
         USBPcapBufferWriteUnsafe(pRootData,
-                                 buffer,
+                                 payloadEntries[i].buffer,
                                  tmp);
+        bytes -= tmp;
     }
+
     return STATUS_SUCCESS;
 }
 
-NTSTATUS USBPcapBufferWriteTimestampedPacket(PUSBPCAP_ROOTHUB_DATA pRootData,
-                                             LARGE_INTEGER timestamp,
-                                             PUSBPCAP_BUFFER_PACKET_HEADER header,
-                                             PVOID buffer)
+NTSTATUS USBPcapBufferWriteTimestampedPayload(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                              LARGE_INTEGER timestamp,
+                                              PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                              PUSBPCAP_PAYLOAD_ENTRY payload)
 {
-    KIRQL              irql;
-    NTSTATUS           status;
+    KIRQL                  irql;
+    NTSTATUS               status;
 
     KeAcquireSpinLock(&pRootData->bufferLock, &irql);
-    status = USBPcapBufferStorePacket(pRootData, timestamp, header, buffer);
+    status = USBPcapBufferStorePacket(pRootData, timestamp, header, payload);
     KeReleaseSpinLock(&pRootData->bufferLock, irql);
 
     if (NT_SUCCESS(status))
@@ -613,6 +628,29 @@ NTSTATUS USBPcapBufferWriteTimestampedPacket(PUSBPCAP_ROOTHUB_DATA pRootData,
     }
 
     return status;
+}
+
+NTSTATUS USBPcapBufferWritePayload(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                   PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                   PUSBPCAP_PAYLOAD_ENTRY payload)
+{
+    LARGE_INTEGER timestamp = USBPcapGetCurrentTimestamp();
+    return USBPcapBufferWriteTimestampedPayload(pRootData, timestamp, header, payload);
+}
+
+NTSTATUS USBPcapBufferWriteTimestampedPacket(PUSBPCAP_ROOTHUB_DATA pRootData,
+                                             LARGE_INTEGER timestamp,
+                                             PUSBPCAP_BUFFER_PACKET_HEADER header,
+                                             PVOID buffer)
+{
+    USBPCAP_PAYLOAD_ENTRY  payload[2];
+
+    payload[0].size   = header->dataLength;
+    payload[0].buffer = buffer;
+    payload[1].size   = 0;
+    payload[1].buffer = NULL;
+
+    return USBPcapBufferWriteTimestampedPayload(pRootData, timestamp, header, payload);
 }
 
 NTSTATUS USBPcapBufferWritePacket(PUSBPCAP_ROOTHUB_DATA pRootData,

@@ -113,9 +113,28 @@ typedef struct
 } USBPCAP_BUFFER_PACKET_HEADER, *PUSBPCAP_BUFFER_PACKET_HEADER;
 #pragma pack(pop)
 
-#define USBPCAP_CONTROL_STAGE_SETUP   0
-#define USBPCAP_CONTROL_STAGE_DATA    1
-#define USBPCAP_CONTROL_STAGE_STATUS  2
+/* USBPcap versions before 1.5.0.0 recorded control transactions as two
+ * or three pcap packets:
+ *   * USBPCAP_CONTROL_STAGE_SETUP with 8 bytes USB SETUP data
+ *   * Optional USBPCAP_CONTROL_STAGE_DATA with either DATA OUT or IN
+ *   * USBPCAP_CONTROL_STAGE_STATUS without data on IRP completion
+ *
+ * Such capture was considered unnecessary complex. Due to that, since
+ * USBPcap 1.5.0.0, the control transactions are recorded as two packets:
+ *   * USBPCAP_CONTROL_STAGE_SETUP with 8 bytes USB SETUP data and
+ *     optional DATA OUT
+ *   * USBPCAP_CONTROL_STAGE_COMPLETE without payload or with the DATA IN
+ *
+ * The merit behind this change was that Wireshark dissector, since the
+ * very first time when Wireshark understood USBPcap format, was really
+ * expecting the USBPCAP_CONTROL_STAGE_SETUP to contain SETUP + DATA OUT.
+ * Even when they Wireshark doesn't recognize USBPCAP_CONTROL_STAGE_COMPLETE
+ * it will still process the payload correctly.
+ */
+#define USBPCAP_CONTROL_STAGE_SETUP    0
+#define USBPCAP_CONTROL_STAGE_DATA     1
+#define USBPCAP_CONTROL_STAGE_STATUS   2
+#define USBPCAP_CONTROL_STAGE_COMPLETE 3
 
 #pragma pack(push, 1)
 typedef struct
