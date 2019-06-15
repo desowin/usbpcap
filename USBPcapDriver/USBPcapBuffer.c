@@ -601,9 +601,12 @@ USBPcapBufferStorePacket(PUSBPCAP_ROOTHUB_DATA pRootData,
     for (i = 0; (bytes > 0) && (payloadEntries[i].buffer); i++)
     {
         tmp = min(bytes, payloadEntries[i].size);
-        USBPcapBufferWriteUnsafe(pRootData,
-                                 payloadEntries[i].buffer,
-                                 tmp);
+        if (tmp > 0)
+        {
+            USBPcapBufferWriteUnsafe(pRootData,
+                                     payloadEntries[i].buffer,
+                                     tmp);
+        }
         bytes -= tmp;
     }
 
