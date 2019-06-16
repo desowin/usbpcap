@@ -67,18 +67,18 @@ All transfer-specific headers inherit the USBPCAP\_BUFFER\_PACKET\_HEADER, so fi
 When transfer is equal to USBPCAP\_TRANSFER\_ISOCHRONOUS (0) the header type is USBPCAP\_BUFFER\_ISOCH\_HEADER  
 
 ```c
-/\* Note about isochronous packets:
- \*   packet[x].length, packet[x].status and errorCount are only relevant
- \*   when USBPCAP_INFO_PDO_TO_FDO is set
- \*
- \*   packet[x].length is not used for isochronous OUT transfers.
- \*
- \* Buffer data is attached to:
- \*   * for isochronous OUT transactions (write to device)
- \*       Requests (USBPCAP_INFO_PDO_TO_FDO is not set)
- \*   * for isochronous IN transactions (read from device)
- \*       Responses (USBPCAP_INFO_PDO_TO_FDO is set)
- \*/
+/* Note about isochronous packets:
+ *   packet[x].length, packet[x].status and errorCount are only relevant
+ *   when USBPCAP_INFO_PDO_TO_FDO is set
+ *
+ *   packet[x].length is not used for isochronous OUT transfers.
+ *
+ * Buffer data is attached to:
+ *   * for isochronous OUT transactions (write to device)
+ *       Requests (USBPCAP_INFO_PDO_TO_FDO is not set)
+ *   * for isochronous IN transactions (read from device)
+ *       Responses (USBPCAP_INFO_PDO_TO_FDO is set)
+ */
 #pragma pack(1)
 typedef struct
 {
@@ -107,9 +107,28 @@ When transfer is equal to USBPCAP\_TRANSFER\_INTERRUPT (1) the header type is US
 When transfer is equal to USBPCAP\_TRANSFER\_CONTROL (2) the header type is USBPCAP\_BUFFER\_CONTROL\_HEADER  
 
 ```c
-#define USBPCAP_CONTROL_STAGE_SETUP   0
-#define USBPCAP_CONTROL_STAGE_DATA    1
-#define USBPCAP_CONTROL_STAGE_STATUS  2
+/* USBPcap versions before 1.5.0.0 recorded control transactions as two
+ * or three pcap packets:
+ *   * USBPCAP_CONTROL_STAGE_SETUP with 8 bytes USB SETUP data
+ *   * Optional USBPCAP_CONTROL_STAGE_DATA with either DATA OUT or IN
+ *   * USBPCAP_CONTROL_STAGE_STATUS without data on IRP completion
+ *
+ * Such capture was considered unnecessary complex. Due to that, since
+ * USBPcap 1.5.0.0, the control transactions are recorded as two packets:
+ *   * USBPCAP_CONTROL_STAGE_SETUP with 8 bytes USB SETUP data and
+ *     optional DATA OUT
+ *   * USBPCAP_CONTROL_STAGE_COMPLETE without payload or with the DATA IN
+ *
+ * The merit behind this change was that Wireshark dissector, since the
+ * very first time when Wireshark understood USBPcap format, was really
+ * expecting the USBPCAP_CONTROL_STAGE_SETUP to contain SETUP + DATA OUT.
+ * Even if Wireshark version doesn't recognize USBPCAP_CONTROL_STAGE_COMPLETE
+ * it will still process the payload correctly.
+ */
+#define USBPCAP_CONTROL_STAGE_SETUP    0
+#define USBPCAP_CONTROL_STAGE_DATA     1
+#define USBPCAP_CONTROL_STAGE_STATUS   2
+#define USBPCAP_CONTROL_STAGE_COMPLETE 3
 
 #pragma pack(1)
 typedef struct
