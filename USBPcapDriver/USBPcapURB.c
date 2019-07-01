@@ -975,6 +975,38 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             break;
         }
 
+        case URB_FUNCTION_GET_CURRENT_FRAME_NUMBER:
+        {
+            struct _URB_GET_CURRENT_FRAME_NUMBER  *request;
+            USBPCAP_BUFFER_PACKET_HEADER           packetHeader;
+            UINT32                                 frameNum;
+
+            request = (struct _URB_GET_CURRENT_FRAME_NUMBER*)pUrb;
+
+            packetHeader.headerLen  = sizeof(USBPCAP_BUFFER_PACKET_HEADER);
+            packetHeader.irpId      = (UINT64) pIrp;
+            packetHeader.status     = header->Status;
+            packetHeader.function   = header->Function;
+            packetHeader.info       = 0;
+            packetHeader.bus        = pDeviceData->pRootData->busId;
+            packetHeader.device     = pDeviceData->deviceAddress;
+            packetHeader.endpoint   = 0x80;
+            packetHeader.transfer   = USBPCAP_TRANSFER_IRP_INFO;
+            packetHeader.dataLength = 0;
+
+            if (post == TRUE)
+            {
+                packetHeader.info |= USBPCAP_INFO_PDO_TO_FDO;
+                frameNum = request->FrameNumber;
+                packetHeader.dataLength = sizeof(frameNum);
+            }
+
+            USBPcapBufferWritePacket(pDeviceData->pRootData,
+                                     &packetHeader,
+                                     &frameNum);
+            break;
+        }
+
         default:
         {
             if (post == FALSE)
