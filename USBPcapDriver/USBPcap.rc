@@ -1,8 +1,8 @@
 #include "Windows.h"
 
 1                  VERSIONINFO
-FILEVERSION        1,5,0,0
-PRODUCTVERSION     1,5,0,0
+FILEVERSION        1,5,1,0
+PRODUCTVERSION     1,5,1,0
 FILEFLAGSMASK      VS_FFI_FILEFLAGSMASK
 FILEFLAGS          (VS_FF_PRIVATEBUILD|VS_FF_PRERELEASE|VS_FF_DEBUG)
 FILEOS             VOS__WINDOWS32
@@ -15,12 +15,12 @@ BEGIN
         BEGIN
             VALUE "CompanyName",      "USBPcap"
             VALUE "FileDescription",  "USBPcap Driver"
-            VALUE "FileVersion",      "1.5.0.0"
+            VALUE "FileVersion",      "1.5.1.0"
             VALUE "InternalName",     "USBPcap"
             VALUE "LegalCopyright",   "(c) 2013-2019 Tomasz Mon"
             VALUE "OriginalFilename", "USBPcap"
             VALUE "ProductName",      "USBPcap Sniffer Driver"
-            VALUE "ProductVersion",   "1.5.0.0"
+            VALUE "ProductVersion",   "1.5.1.0"
         END
     END
 
