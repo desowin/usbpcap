@@ -14,7 +14,7 @@ Download
 
 Digitally signed installer for Windows XP, Vista, 7, 8 and 10, both x86 and x64 is available at Github. After installation you must restart your computer.
 
-[USBPcapSetup-1.5.0.0.exe](thankyou.html?file=1.5.0.0/USBPcapSetup-1.5.0.0.exe)
+[USBPcapSetup-1.5.1.0.exe](thankyou.html?file=1.5.1.0/USBPcapSetup-1.5.1.0.exe)
 
 Wireshark
 ---------

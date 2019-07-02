@@ -23,7 +23,7 @@ layout: default
 Thank you for downloading USBPcap
 ---------------------------------
 
-Your download should start shortly. If it does not start please click [here](https://github.com/desowin/usbpcap/releases/download/1.5.0.0/USBPcapSetup-1.5.0.0.exe)
+Your download should start shortly. If it does not start please click [here](https://github.com/desowin/usbpcap/releases/download/1.5.1.0/USBPcapSetup-1.5.1.0.exe)
 
 MSDN Subscription
 -----------------
