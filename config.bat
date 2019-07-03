@@ -22,4 +22,4 @@ set _USBPCAP_SIGN_OPTS_SHA256=sign /as /v /fd sha256 /f %~dp0certificates\USBPca
 ::_USBPCAP_VERSION specifies version of the installer.
 ::To update driver version edit USBPcapDriver\USBPcap.rc and
 ::USBPcapDriver\SOURCES
-set _USBPCAP_VERSION="1.5.1.0"
+set _USBPCAP_VERSION="1.5.2.0"
