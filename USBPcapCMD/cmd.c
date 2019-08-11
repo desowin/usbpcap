@@ -20,10 +20,12 @@
 #include "roothubs.h"
 #include "version.h"
 #include "descriptors.h"
+#include "USBPcap.h"
 
 #define INPUT_BUFFER_SIZE 1024
 
 #define DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE (1024*1024)
+#define DEFAULT_SNAPSHOT_LENGTH             (65535)
 
 static BOOL IsElevated()
 {
@@ -339,9 +341,10 @@ static BOOL generate_worker_command_line(struct thread_data *data,
         *pcap_handle = INVALID_HANDLE_VALUE;
     }
 
-#define WORKER_CMD_LINE_FORMATTER             L"-d %S -b %d -o %S"
-#define WORKER_CMD_LINE_FORMATTER_PIPE        L"-d %S -b %d -o %s"
+#define WORKER_CMD_LINE_FORMATTER             L"-d %S -b %u -o %S"
+#define WORKER_CMD_LINE_FORMATTER_PIPE        L"-d %S -b %u -o %s"
 
+#define WORKER_CMD_LINE_FORMATTER_SNAPLEN     L" -s %u"
 #define WORKER_CMD_LINE_FORMATTER_DEVICES     L" --devices %S"
 #define WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL L" --capture-from-all-devices"
 #define WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW L" --capture-from-new-devices"
@@ -352,6 +355,8 @@ static BOOL generate_worker_command_line(struct thread_data *data,
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER);
     cmdLineLen += 9 /* maximum bufferlen in characters */;
     cmdLineLen += 1 /* NULL termination */;
+    cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_SNAPLEN);
+    cmdLineLen += 10 /* maximum snaplen in characters */;
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_DEVICES);
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL);
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
@@ -385,6 +390,14 @@ static BOOL generate_worker_command_line(struct thread_data *data,
                             data->device,
                             data->bufferlen,
                             pipeName);
+    }
+
+    if (data->snaplen != DEFAULT_SNAPSHOT_LENGTH)
+    {
+        nChars += swprintf_s(&cmdLine[nChars],
+                             cmdLineLen - nChars,
+                             WORKER_CMD_LINE_FORMATTER_SNAPLEN,
+                             data->snaplen);
     }
 
     if (data->address_list != NULL)
@@ -422,6 +435,7 @@ static BOOL generate_worker_command_line(struct thread_data *data,
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL
 #undef WORKER_CMD_LINE_FORMATTER_DEVICES
+#undef WORKER_CMD_LINE_FORMATTER_SNAPLEN
 
     free(pipeName);
 
@@ -1145,7 +1159,7 @@ static int print_extcap_options(const char *device)
 
     printf("arg {number=0}{call=--snaplen}"
            "{display=Snapshot length}{tooltip=Snapshot length}"
-           "{type=unsigned}{default=65535}\n");
+           "{type=unsigned}{default=%d}\n", DEFAULT_SNAPSHOT_LENGTH);
     printf("arg {number=1}{call=--bufferlen}"
            "{display=Capture buffer length}"
            "{tooltip=USBPcap kernel-mode capture buffer length in bytes}"
@@ -1391,7 +1405,7 @@ int __cdecl main(int argc, CHAR **argv)
     data.capture_all = FALSE;
     data.capture_new = FALSE;
     data.inject_descriptors = FALSE;
-    data.snaplen = 65535;
+    data.snaplen = DEFAULT_SNAPSHOT_LENGTH;
     data.bufferlen = DEFAULT_INTERNAL_KERNEL_BUFFER_SIZE;
     data.job_handle = INVALID_HANDLE_VALUE;
     data.worker_process_thread = INVALID_HANDLE_VALUE;
@@ -1475,6 +1489,12 @@ int __cdecl main(int argc, CHAR **argv)
                 printf("getopt_long() returned character code 0x%X. Please report.\n", c);
                 return -1;
         }
+    }
+
+    if (data.snaplen > (data.bufferlen - sizeof(pcaprec_hdr_t)))
+    {
+        fprintf(stderr, "Packets larger than %u bytes won't be captured due to too small buffer.\n",
+                data.bufferlen - sizeof(pcaprec_hdr_t));
     }
 
     /* Handle extcap options separately from standard USBPcapCMD options. */
