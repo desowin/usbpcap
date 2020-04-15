@@ -42,23 +42,25 @@ VOID USBPcapAddEndpointInfo(IN PRTL_GENERIC_TABLE table,
 {
     USBPCAP_INTERNAL_ENDPOINT_INFO  info;
     BOOLEAN                         new;
+    PUSBPCAP_INTERNAL_ENDPOINT_INFO pInfo;
 
     info.info.handle          = pipeInfo->PipeHandle;
     info.info.type            = pipeInfo->PipeType;
     info.info.endpointAddress = pipeInfo->EndpointAddress;
     info.info.deviceAddress   = deviceAddress;
 
-    RtlInsertElementGenericTable(table,
+    pInfo = RtlInsertElementGenericTable(table,
                                  (PVOID)&info,
                                  sizeof(USBPCAP_INTERNAL_ENDPOINT_INFO),
                                  &new);
 
     if (new == FALSE)
-    {        
-		DkDbgStr("Element already exists in table. Lets replace it!");
-		USBPcapRemoveEndpointInfo(table, pipeInfo->PipeHandle);
-		USBPcapAddEndpointInfo(table, pipeInfo, deviceAddress);
-		DkDbgStr("Replace Done!");
+    {
+        DkDbgStr("Element already exists in table. Lets replace elements data!");
+        pInfo->info.type            = pipeInfo->PipeType;
+        pInfo->info.endpointAddress = pipeInfo->EndpointAddress;
+        pInfo->info.deviceAddress   = deviceAddress;
+        DkDbgStr("Replace Done!");
     }
 }
 
