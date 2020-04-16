@@ -54,13 +54,12 @@ VOID USBPcapAddEndpointInfo(IN PRTL_GENERIC_TABLE table,
                                  sizeof(USBPCAP_INTERNAL_ENDPOINT_INFO),
                                  &new);
 
-    if (new == FALSE)
+    if ((new == FALSE) && (pInfo != NULL))
     {
         DkDbgStr("Element already exists in table, updating entry");
         pInfo->info.type            = pipeInfo->PipeType;
         pInfo->info.endpointAddress = pipeInfo->EndpointAddress;
         pInfo->info.deviceAddress   = deviceAddress;
-        DkDbgStr("Replace Done!");
     }
 }
 
