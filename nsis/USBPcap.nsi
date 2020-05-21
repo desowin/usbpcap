@@ -44,7 +44,6 @@ RequestExecutionLevel admin
 
   ; That will have written an uninstaller binary for us.  Now we sign it
   ; with your favourite code signing tool.
-  !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA1% $%TEMP%\Uninstall.exe' = 0
   !system '$%_USBPCAP_SIGNTOOL% $%_USBPCAP_SIGN_OPTS_SHA256% $%TEMP%\Uninstall.exe' = 0
 
   ; Good.  Now we can carry on writing the real installer.
@@ -78,6 +77,29 @@ Page instfiles
 UninstPage uninstConfirm
 UninstPage instfiles
 
+Function EnsureSHA2IsSupported
+  push $0
+  push $1
+  push $2
+
+  StrCpy $2 0
+
+  System::Call "kernel32::LoadLibrary(t 'wintrust.dll') p .r1"
+  ${If} $1 != 0
+    System::Call "kernel32::GetProcAddress(p r1, t 'CryptCATAdminAcquireContext2') p .r2"
+    System::Call "kernel32::FreeLibrary(p r1)"
+  ${EndIf}
+
+  ${If} $2 == 0
+    MessageBox MB_OK|MB_ICONEXCLAMATION "Windows 7 without updates does not support SHA-2.$\nInstall KB3033929 or KB4474419 before installing USBPcap."
+    Quit
+  ${EndIf}
+
+  pop $2
+  pop $1
+  pop $0
+FunctionEnd
+
 Function .onInit
 !ifdef INNER
   ; If INNER is defined, then we aren't supposed to do anything except write
@@ -88,6 +110,19 @@ Function .onInit
   WriteUninstaller "$%TEMP%\Uninstall.exe"
   Quit  ; just bail out quickly when running the "inner" installer
 !endif
+
+  ; It is no longer possible to get SHA-1 Kernel Mode Code Signing certificate
+  ; Windows 8 and later contain SHA-2 support built-in.
+  ; Windows 7 supports SHA-2 when KB3033929 or KB4474419 is installed.
+  ; Older Windows versions do not support SHA-2.
+  ${IfNot} ${AtLeastWin7}
+    MessageBox MB_OK "Unsupported Windows version. Only Windows 7, 8 and 10 are supported.$\nThe last USBPcap release supporting Windows XP and Vista was 1.5.3.0."
+    Quit
+  ${EndIf}
+
+  ${IfNot} ${AtLeastWin8}
+    Call EnsureSHA2IsSupported
+  ${EndIf}
 
   ${If} ${RunningX64}
     ${DisableX64FSRedirection}
@@ -117,11 +152,6 @@ not_installed:
   Abort
 
 no_removal_pending:
-  ${IfNot} ${AtLeastWinXP}
-    MessageBox MB_OK "Unsupported Windows version. Only XP, Vista, 7, 8 and 10 are supported."
-    Quit
-  ${EndIf}
-
   ${If} ${RunningX64}
     StrCpy $INSTDIR "$PROGRAMFILES64\USBPcap"
   ${Else}
@@ -188,19 +218,11 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
       File "..\Release\Windows8\x64\USBPcap.inf"
       File "..\Release\Windows8\x64\USBPcap.sys"
       File "..\Release\Windows8\x64\USBPcapamd64.cat"
-    ${ElseIf} ${AtLeastWin7}
+    ${Else}
+      ; Assume 64-bit Windows 7
       File "..\Release\Windows7\x64\USBPcap.inf"
       File "..\Release\Windows7\x64\USBPcap.sys"
       File "..\Release\Windows7\x64\USBPcapamd64.cat"
-    ${ElseIf} ${AtLeastWinVista}
-      File "..\Release\Vista\x64\USBPcap.inf"
-      File "..\Release\Vista\x64\USBPcap.sys"
-      File "..\Release\Vista\x64\USBPcapamd64.cat"
-    ${Else}
-      ; Assume 64-bit XP
-      File "..\Release\XP\x64\USBPcap.inf"
-      File "..\Release\XP\x64\USBPcap.sys"
-      File "..\Release\XP\x64\USBPcapamd64.cat"
     ${EndIf}
   ${Else}
     ${If} ${AtLeastWin10}
@@ -211,19 +233,11 @@ Section "USBPcap Driver" SEC_USBPCAPDRIVER
       File "..\Release\Windows8\x86\USBPcap.inf"
       File "..\Release\Windows8\x86\USBPcap.sys"
       File "..\Release\Windows8\x86\USBPcapx86.cat"
-    ${ElseIf} ${AtLeastWin7}
+    ${Else}
+      ; Assume 32-bit Windows 7
       File "..\Release\Windows7\x86\USBPcap.inf"
       File "..\Release\Windows7\x86\USBPcap.sys"
       File "..\Release\Windows7\x86\USBPcapx86.cat"
-    ${ElseIf} ${AtLeastWinVista}
-      File "..\Release\Vista\x86\USBPcap.inf"
-      File "..\Release\Vista\x86\USBPcap.sys"
-      File "..\Release\Vista\x86\USBPcapx86.cat"
-    ${Else}
-      ; Assume 32-bit Win XP
-      File "..\Release\XP\x86\USBPcap.inf"
-      File "..\Release\XP\x86\USBPcap.sys"
-      File "..\Release\XP\x86\USBPcapx86.cat"
     ${EndIf}
   ${EndIf}
 
