@@ -1,0 +1,135 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Include>
+
+  <!-- The files needs for the different OSes all share the same names, so it does generate warning by the WiX compiler.
+       However the conditions (comparing "VersionNT" values) do guarantee uniqueness. -->
+
+  <!-- Windows8 -->
+    <Fragment>
+      <DirectoryRef Id="INSTALLFOLDER">
+        <Component Id="cmpWindows8_USBPcap_inf" Guid="99CC587D-E0A4-49A4-9293-AAA5CE494595">
+          <Condition>VersionNT &gt;= 602</Condition>
+          <File Id="filWindows8_USBPcap_inf" KeyPath="yes" Source="$(var.Windows8.Dir)\USBPcap.inf" />
+        </Component>
+        <Component Id="cmpWindows8_USBPcap_sys" Guid="79F57476-9312-457B-8254-85605FA860B8">
+          <Condition>VersionNT &gt;= 602</Condition>
+          <File Id="filWindows8_USBPcap_sys" KeyPath="yes" Source="$(var.Windows8.Dir)\USBPcap.sys" />
+        </Component>
+        <Component Id="cmpWindows8_USBPcap$(var.USBPcapCatSuffix)_cat" Guid="7DC4FFB8-0C66-4DE1-A246-25606294AC3A">
+          <Condition>VersionNT &gt;= 602</Condition>
+          <File Id="filWindows8_USBPcapamd64_cat" KeyPath="yes" Source="$(var.Windows8.Dir)\USBPcap$(var.USBPcapCatSuffix).cat" />
+        </Component>
+      </DirectoryRef>
+    </Fragment>
+    <Fragment>
+      <ComponentGroup Id="CG.USBPcap8_Driver">
+        <ComponentRef Id="cmpWindows8_USBPcap_inf" />
+        <ComponentRef Id="cmpWindows8_USBPcap_sys" />
+        <ComponentRef Id="cmpWindows8_USBPcap$(var.USBPcapCatSuffix)_cat" />
+      </ComponentGroup>
+    </Fragment>
+
+  <!-- Windows7 -->
+    <Fragment>
+      <DirectoryRef Id="INSTALLFOLDER">
+        <Component Id="cmpWindows7_USBPcap_inf" Guid="486EE85D-B098-488A-89E8-09C5C0EDD0CE">
+          <Condition>VersionNT = 601</Condition>
+          <File Id="filWindows7_USBPcap_inf" KeyPath="yes" Source="$(var.Windows7.Dir)\USBPcap.inf" />
+        </Component>
+        <Component Id="cmpWindows7_USBPcap_sys" Guid="C7A27E11-78E5-425B-8C91-F977FEDE8A00">
+          <Condition>VersionNT = 601</Condition>
+          <File Id="filWindows7_USBPcap_sys" KeyPath="yes" Source="$(var.Windows7.Dir)\USBPcap.sys" />
+        </Component>
+        <Component Id="cmpWindows7_USBPcap$(var.USBPcapCatSuffix)_cat" Guid="E3B713C0-B639-4ECB-B540-2572BB88F96D">
+          <Condition>VersionNT = 601</Condition>
+          <File Id="filWindows7_USBPcapamd64_cat" KeyPath="yes" Source="$(var.Windows7.Dir)\USBPcap$(var.USBPcapCatSuffix).cat" />
+        </Component>
+      </DirectoryRef>
+    </Fragment>
+    <Fragment>
+      <ComponentGroup Id="CG.USBPcap7_Driver">
+        <ComponentRef Id="cmpWindows7_USBPcap_inf" />
+        <ComponentRef Id="cmpWindows7_USBPcap_sys" />
+        <ComponentRef Id="cmpWindows7_USBPcap$(var.USBPcapCatSuffix)_cat" />
+      </ComponentGroup>
+    </Fragment>
+
+  <!-- Windows Vista -->
+    <Fragment>
+      <DirectoryRef Id="INSTALLFOLDER">
+        <Component Id="cmpWindowsVista_USBPcap_inf" Guid="14556DAD-64D2-4232-8CEE-1D61D9387780">
+          <Condition>VersionNT = 600</Condition>
+          <File Id="filWindowsVista_USBPcap_inf" KeyPath="yes" Source="$(var.WindowsVista.Dir)\USBPcap.inf" />
+        </Component>
+        <Component Id="cmpWindowsVista_USBPcap_sys" Guid="ED154E1F-3D58-45CF-B0B4-AE7EC98A1489">
+          <Condition>VersionNT = 600</Condition>
+          <File Id="filWindowsVista_USBPcap_sys" KeyPath="yes" Source="$(var.WindowsVista.Dir)\USBPcap.sys" />
+        </Component>
+        <Component Id="cmpWindowsVista_USBPcap$(var.USBPcapCatSuffix)_cat" Guid="ABF93DD3-5978-483E-A394-64699A27BD51">
+          <Condition>VersionNT = 600</Condition>
+          <File Id="filWindowsVista_USBPcap$(var.USBPcapCatSuffix)_cat" KeyPath="yes" Source="$(var.WindowsVista.Dir)\USBPcap$(var.USBPcapCatSuffix).cat" />
+        </Component>
+      </DirectoryRef>
+    </Fragment>
+    <Fragment>
+      <ComponentGroup Id="CG.USBPcapVista_Driver">
+        <ComponentRef Id="cmpWindowsVista_USBPcap_inf" />
+        <ComponentRef Id="cmpWindowsVista_USBPcap_sys" />
+        <ComponentRef Id="cmpWindowsVista_USBPcap$(var.USBPcapCatSuffix)_cat" />
+      </ComponentGroup>
+    </Fragment>
+
+  <!-- Windows XP -->
+    <Fragment>
+      <DirectoryRef Id="INSTALLFOLDER">
+        <Component Id="cmpWindowsXP_USBPcap_inf" Guid="748AF1D5-A282-4222-947B-03A46A24BD31">
+          <Condition>VersionNT &gt;= 501 AND VersionNT &lt; 600</Condition>
+          <File Id="filWindowsXP_USBPcap_inf" KeyPath="yes" Source="$(var.WindowsXP.Dir)\USBPcap.inf" />
+        </Component>
+        <Component Id="cmpWindowsXP_USBPcap_sys" Guid="81D7D5E6-7F01-4176-8CFE-BB97091C3EA3">
+          <Condition>VersionNT &gt;= 501 AND VersionNT &lt; 600</Condition>
+          <File Id="filWindowsXP_USBPcap_sys" KeyPath="yes" Source="$(var.WindowsXP.Dir)\USBPcap.sys" />
+        </Component>
+        <Component Id="cmpWindowsXP_USBPcap$(var.USBPcapCatSuffix)_cat" Guid="3D54A7D5-7D31-4A75-85C9-7FEAA39BCF5F">
+          <Condition>VersionNT &gt;= 501 AND VersionNT &lt; 600</Condition>
+          <File Id="filWindowsXP_USBPcapamd64_cat" KeyPath="yes" Source="$(var.WindowsXP.Dir)\USBPcap$(var.USBPcapCatSuffix).cat" />
+        </Component>
+      </DirectoryRef>
+    </Fragment>
+    <Fragment>
+      <ComponentGroup Id="CG.USBPcapXP_Driver">
+        <ComponentRef Id="cmpWindowsXP_USBPcap_inf" />
+        <ComponentRef Id="cmpWindowsXP_USBPcap_sys" />
+        <ComponentRef Id="cmpWindowsXP_USBPcap$(var.USBPcapCatSuffix)_cat" />
+      </ComponentGroup>
+    </Fragment>
+
+   <!-- USBPcapCMD -->
+    <Fragment>
+      <DirectoryRef Id="INSTALLFOLDER">
+        <Component Id="cmpUSBPcapCMD$(var.USBPcapCMDSuffix)_exe" Guid="*">
+          <File Id="filUSBPcapCMD$(var.USBPcapCMDSuffix)_exe" KeyPath="yes" Source="$(var.Release.Dir)\USBPcapCMD$(var.USBPcapCMDSuffix).exe" />
+        </Component>
+      </DirectoryRef>
+    </Fragment>
+    <Fragment>
+      <ComponentGroup Id="CG.USBPcapCMD">
+        <ComponentRef Id="cmpUSBPcapCMD$(var.USBPcapCMDSuffix)_exe" />
+      </ComponentGroup>
+    </Fragment>
+
+   <!-- DetectUSB3 -->
+    <Fragment>
+      <DirectoryRef Id="INSTALLFOLDER">
+        <Component Id="cmpDetectUSB3" KeyPath="yes" Guid="54959583-56CC-4898-B792-7F769333C1AD">
+          <RegistryKey Root="HKLM" Key="SYSTEM\CurrentControlSet\services\USBPcap" ForceCreateOnInstall="yes" ForceDeleteOnUninstall="yes" />
+        </Component>
+      </DirectoryRef>
+    </Fragment>
+    <Fragment>
+      <ComponentGroup Id="CG.DetectUSB3">
+        <ComponentRef Id="cmpDetectUSB3" />
+      </ComponentGroup>
+    </Fragment>
+  
+</Include>
