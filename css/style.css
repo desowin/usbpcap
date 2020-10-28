@@ -5,7 +5,7 @@ body {
 }
 #container {
 	margin: 0 auto;
-	width: 750px
+	width: 800px
 }
 #header {
 	width: 100%
@@ -21,16 +21,16 @@ body {
 #main_content {
 	margin: 0 auto;
 	width: 100%;
-	background: #FFFFFF url('../images/background_content.gif');
+	background: #FFFFFF url('../images/background_content.png');
 	background-repeat: repeat-y
 } 
 #main_content_top {
 	height: 30px;
-	background: #FFFFFF url('../images/background_top.gif');
+	background: #FFFFFF url('../images/background_top.png');
 } 
 #main_content_bottom {
 	height: 30px;
-	background: #FFFFFF url('../images/background_bottom.gif');
+	background: #FFFFFF url('../images/background_bottom.png');
 }
 #footer {
 	text-align: center;
@@ -39,7 +39,7 @@ body {
 }
 .content {
 	float: left;
-	width: 510px;
+	width: 560px;
 	text-align: justify;
 	padding: 0 30px 0 30px;
 	font-size: 12px
