@@ -7,7 +7,7 @@ USBPcap - USB Packet capture for Windows
 
 USBPcap is an open-source USB sniffer for Windows.
 
- [![](tour/stdin_capture_small.png)](tour/stdin_capture.png "Screenshot") 
+ [![](tour/extcap_live_capture_small.png)](tour/extcap_live_capture.png "Screenshot")
 
 Download
 --------
