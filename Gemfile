@@ -1,10 +1,12 @@
 source "https://rubygems.org"
 
-gem "jekyll", "~> 3.8.5"
+gem "jekyll", "~> 3.9.2"
 gem "USBPCAP", :path => ""
+gem "kramdown-parser-gfm", "~> 1.1.0"
+gem "webrick", "~> 1.7.0"
 
 group :jekyll_plugins do
-  gem "jekyll-feed", "~> 0.6"
+  gem "jekyll-feed", "~> 0.17.0"
 end
 
 # Windows does not include zoneinfo files, so bundle the tzinfo-data gem
