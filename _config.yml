@@ -6,6 +6,9 @@ url: "https://desowin.org/usbpcap/"
 twitter_username: USBPcap
 github_username: desowin
 
+# Usbpcap version
+usbpcap_file: USBPcapSetup-1.5.4.0.exe
+usbpcap_link: https://github.com/desowin/usbpcap/releases/download/1.5.4.0/USBPcapSetup-1.5.4.0.exe
 
 source: .
 markdown: kramdown

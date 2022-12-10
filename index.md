@@ -14,7 +14,7 @@ Download
 
 Digitally signed installer for Windows 7, 8 and 10, both x86 and x64 is available at Github. After installation you must restart your computer.
 
-[USBPcapSetup-1.5.4.0.exe](thankyou.html?file=1.5.4.0/USBPcapSetup-1.5.4.0.exe)
+[{{ site.usbpcap_file }}](thankyou.html)
 
 Wireshark
 ---------

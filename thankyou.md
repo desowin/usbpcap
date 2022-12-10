@@ -2,28 +2,18 @@
 layout: default
 ---
 
-{% raw %}
 <script>
     window.onload = function() {
-        $.urlParam = function(name){
-            var results = new RegExp('[\\?&]' + name + '=([^&#]*)').exec(window.location.href);
-            if (results==null){
-            return null;
-            }else{
-            return results[1] || 0;
-            }
-        }
          setTimeout(function() {
-            window.location = 'https://github.com/desowin/usbpcap/releases/download/'+$.urlParam('file');
+            window.location = '{{ site.usbpcap_link }}';
         }, 2000);
     }
 </script>
-{% endraw %}
 
 Thank you for downloading USBPcap
 ---------------------------------
 
-Your download should start shortly. If it does not start please click [here](https://github.com/desowin/usbpcap/releases/download/1.5.4.0/USBPcapSetup-1.5.4.0.exe)
+Your download should start shortly. If it does not start please click [here]({{ site.usbpcap_link }})
 
 MSDN Subscription
 -----------------
