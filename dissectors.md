@@ -9,7 +9,7 @@ Dissectors deode the captured data. As a result of dissection, user is presented
 
 Data flow between dissectors is shown on figure 1. Each box represents single dissector. In the top part of box there are possible input data source names (dissector source code is in wireshark/epan/dissectors directory). In the middle of the box there is source filename of particular dissector. In the bottom of the box there are possible output data names.
 
-[![](images/wireshark_dissectors_small.png)](images/wireshark_dissectors.png "Figure 1: Wireshark dissectors overview.")  
+[![](images/wireshark_dissectors.png){: width="560"}](images/wireshark_dissectors.png "Figure 1: Wireshark dissectors overview.")
 Figure 1: Wireshark dissectors overview.
 
 _packet-frame.c_ is the top-level dissector that reads pcap files. _packet-usb.c_ knows how to decode the pseudo-headers from Linux (WTAP\_ENCAP\_USB) and Windows (WTAP\_ENCAP\_USBPCAP) packets. Moreover _packet-usb.c_ parses USB standard descriptors and outputs the data (bulk, interrupt and control) for additional dissection. In order to make the right dissector process the data (for example, bulk), _packet-usb.c_ should have parsed the USB descriptors to know the USB class the device conforms to. This is why you should plug the device in after starting capture.

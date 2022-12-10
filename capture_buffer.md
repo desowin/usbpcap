@@ -34,7 +34,7 @@ Following symbols were used instead of full variable names:
 
 Both **R** and **W** can take values from range \[0, N-1\]. Buffer is empty if and only if **R=W** (**N-1** bytes of data can be written then). If **R<W** there are **N-R+W** unread bytes of data and it is possible to write **R-W-1** bytes of additional data. If **R>W** there are **W-R** unread bytes of data and it is possible to write **N-W-R-1** bytes of additional data.
 
-[![](images/capture_buffer_small.png)](images/capture_buffer.png "Figure 1: USBPcap capture buffer working principle.")  
+[![](images/capture_buffer.png){: width="560"}](images/capture_buffer.png "Figure 1: USBPcap capture buffer working principle.")
 Figure 1: USBPcap capture buffer working principle.
 
 Sample 6-step buffer cycle is presented on figure 1. The steps are described below.
