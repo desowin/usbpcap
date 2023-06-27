@@ -87,11 +87,15 @@
     <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);</ExternalIncludePath>
     <OutDir>$(SolutionDir)build\driver\$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>build\$(Platform)\$(ConfigurationName)\</IntDir>
+    <TimeStampServer>http://sha256timestamp.ws.symantec.com/sha256/timestamp</TimeStampServer>
+    <DiagnosticMode>true</DiagnosticMode>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\driver\$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>build\$(Platform)\$(ConfigurationName)\</IntDir>
+    <TimeStampServer>http://sha256timestamp.ws.symantec.com/sha256/timestamp</TimeStampServer>
+    <DiagnosticMode>true</DiagnosticMode>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -103,9 +107,13 @@
     </ClCompile>
     <DriverSign>
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+      <AdditionalOptions>/as /td sha256 /tr "http://sha256timestamp.ws.symantec.com/sha256/timestamp" %(AdditionalOptions)</AdditionalOptions>
     </DriverSign>
     <Link>
-      <AdditionalDependencies>$(DDK_LIB_PATH)wdmsec.lib;$(DDK_LIB_PATH)usbd.lib</AdditionalDependencies>
+      <AdditionalDependencies>$(DDK_LIB_PATH)wdmsec.lib;$(DDK_LIB_PATH)usbd.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <IgnoreSpecificDefaultLibraries>
+      </IgnoreSpecificDefaultLibraries>
+      <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
     </Link>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
@@ -117,6 +125,7 @@
     </ClCompile>
     <DriverSign>
       <FileDigestAlgorithm>sha256</FileDigestAlgorithm>
+      <AdditionalOptions>/as /tr "http://sha256timestamp.ws.symantec.com/sha256/timestamp" /td sha256 %(AdditionalOptions)</AdditionalOptions>
     </DriverSign>
     <Link>
       <IgnoreAllDefaultLibraries>true</IgnoreAllDefaultLibraries>
