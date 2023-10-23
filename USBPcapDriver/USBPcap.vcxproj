@@ -49,29 +49,13 @@
     <WindowsTargetPlatformVersion>$(LatestTargetPlatformVersion)</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+  <PropertyGroup Label="Configuration">
     <TargetVersion>Windows10</TargetVersion>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
     <ConfigurationType>Driver</ConfigurationType>
     <DriverType>KMDF</DriverType>
     <DriverTargetPlatform>Universal</DriverTargetPlatform>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'" Label="Configuration">
-    <TargetVersion>Windows10</TargetVersion>
-    <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset>WindowsKernelModeDriver10.0</PlatformToolset>
-    <ConfigurationType>Driver</ConfigurationType>
-    <DriverType>KMDF</DriverType>
-    <DriverTargetPlatform>Universal</DriverTargetPlatform>
-    <KMDF_VERSION_MAJOR>
-    </KMDF_VERSION_MAJOR>
-    <KMDF_VERSION_MINOR>
-    </KMDF_VERSION_MINOR>
-    <KMDF_MINIMUM_VERSION_REQUIRED>
-    </KMDF_MINIMUM_VERSION_REQUIRED>
-    <_NT_TARGET_VERSION>
-    </_NT_TARGET_VERSION>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
   <ImportGroup Label="ExtensionSettings">
@@ -81,17 +65,10 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup />
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+  <PropertyGroup>
     <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <IncludePath>$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(VC_IncludePath);$(WindowsSDK_IncludePath);</ExternalIncludePath>
-    <OutDir>$(SolutionDir)build\driver\$(Platform)\$(ConfigurationName)\</OutDir>
-    <IntDir>build\$(Platform)\$(ConfigurationName)\</IntDir>
-    <TimeStampServer>http://sha256timestamp.ws.symantec.com/sha256/timestamp</TimeStampServer>
-    <DiagnosticMode>true</DiagnosticMode>
-  </PropertyGroup>
-  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|ARM64'">
-    <DebuggerFlavor>DbgengKernelDebugger</DebuggerFlavor>
     <OutDir>$(SolutionDir)build\driver\$(Platform)\$(ConfigurationName)\</OutDir>
     <IntDir>build\$(Platform)\$(ConfigurationName)\</IntDir>
     <TimeStampServer>http://sha256timestamp.ws.symantec.com/sha256/timestamp</TimeStampServer>
