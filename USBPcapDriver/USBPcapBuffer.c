@@ -297,6 +297,7 @@ NTSTATUS USBPcapSetUpBuffer(PUSBPCAP_ROOTHUB_DATA pData,
             /* Free the old buffer */
             ExFreePool(pData->buffer);
             pData->buffer = buffer;
+            pData->bufferSize = bytes;
             pData->readOffset = 0;
             pData->writeOffset = allocated;
         }
