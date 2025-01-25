@@ -160,7 +160,7 @@ static UINT32 USBPcapBufferRead(PUSBPCAP_ROOTHUB_DATA pData,
     /* No data to be read or empty destination buffer */
     if (available == 0 || destBufferSize == 0)
     {
-        return available;
+        return 0;
     }
 
     /* Calculate how many bytes will fit into buffer */
@@ -443,23 +443,29 @@ NTSTATUS USBPcapBufferHandleReadIrp(PIRP pIrp,
     KeAcquireSpinLock(&pRootData->bufferLock, &irql);
     bytesRead = USBPcapBufferRead(pRootData,
                                   buffer, bufferLength);
-    KeReleaseSpinLock(&pRootData->bufferLock, irql);
-
     *pBytesRead = bytesRead;
     if (bytesRead == 0)
     {
         IoCsqInsertIrp(&pDevExt->context.control.ioCsq,
                        pIrp, NULL);
+        KeReleaseSpinLock(&pRootData->bufferLock, irql);
         return STATUS_PENDING;
     }
 
+    KeReleaseSpinLock(&pRootData->bufferLock, irql);
     return STATUS_SUCCESS;
 }
 
-static void USBPcapBufferCompletePendedReadIrp(PUSBPCAP_ROOTHUB_DATA pRootData)
+/* called with pRootData->bufferLock held
+ * releases pRootData->bufferLock before return
+ */
+static void USBPcapBufferCompletePendedReadIrp(PUSBPCAP_ROOTHUB_DATA pRootData, KIRQL irql)
 {
     PDEVICE_EXTENSION  pControlExt;
     PIRP               pIrp = NULL;
+    PVOID              buffer;
+    UINT32             bufferLength;
+    UINT32             bytes;
 
     pControlExt = (PDEVICE_EXTENSION)pRootData->controlDevice->DeviceExtension;
 
@@ -467,49 +473,47 @@ static void USBPcapBufferCompletePendedReadIrp(PUSBPCAP_ROOTHUB_DATA pRootData)
 
     pIrp = IoCsqRemoveNextIrp(&pControlExt->context.control.ioCsq,
                                   NULL);
-    if (pIrp != NULL)
+    if (pIrp == NULL)
     {
-        PVOID   buffer;
-        UINT32  bufferLength;
-        UINT32  bytes;
+        KeReleaseSpinLock(&pRootData->bufferLock, irql);
+        return;
+    }
 
-        /*
-         * Only IRPs with non-zero buffer are being queued.
-         *
-         * Since control device has DO_DIRECT_IO bit set the MDL is already
-         * probed and locked
-         */
-        buffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress,
-                                              NormalPagePriority);
+    /*
+     * Only IRPs with non-zero buffer are being queued.
+     *
+     * Since control device has DO_DIRECT_IO bit set the MDL is already
+     * probed and locked
+     */
+    buffer = MmGetSystemAddressForMdlSafe(pIrp->MdlAddress,
+                                          NormalPagePriority);
 
-        if (buffer == NULL)
+    if (buffer == NULL)
+    {
+        pIrp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
+        bytes = 0;
+    }
+    else
+    {
+        UINT32 bufferLength = MmGetMdlByteCount(pIrp->MdlAddress);
+
+        if (bufferLength != 0)
         {
-            pIrp->IoStatus.Status = STATUS_INSUFFICIENT_RESOURCES;
-            bytes = 0;
+            bytes = USBPcapBufferRead(pRootData,
+                                      buffer, bufferLength);
         }
         else
         {
-            UINT32 bufferLength = MmGetMdlByteCount(pIrp->MdlAddress);
-
-            if (bufferLength != 0)
-            {
-                KIRQL  irql;
-                KeAcquireSpinLock(&pRootData->bufferLock, &irql);
-                bytes = USBPcapBufferRead(pRootData,
-                                          buffer, bufferLength);
-                KeReleaseSpinLock(&pRootData->bufferLock, irql);
-            }
-            else
-            {
-                bytes = 0;
-            }
-
-            pIrp->IoStatus.Status = STATUS_SUCCESS;
+            bytes = 0;
         }
 
-        pIrp->IoStatus.Information = (ULONG_PTR) bytes;
-        IoCompleteRequest(pIrp, IO_NO_INCREMENT);
+        pIrp->IoStatus.Status = STATUS_SUCCESS;
     }
+
+    pIrp->IoStatus.Information = (ULONG_PTR) bytes;
+    /* release lock before completing the IRP! */
+    KeReleaseSpinLock(&pRootData->bufferLock, irql);
+    IoCompleteRequest(pIrp, IO_NO_INCREMENT);
 }
 
 __inline static VOID
@@ -624,11 +628,13 @@ NTSTATUS USBPcapBufferWriteTimestampedPayload(PUSBPCAP_ROOTHUB_DATA pRootData,
 
     KeAcquireSpinLock(&pRootData->bufferLock, &irql);
     status = USBPcapBufferStorePacket(pRootData, timestamp, header, payload);
-    KeReleaseSpinLock(&pRootData->bufferLock, irql);
-
     if (NT_SUCCESS(status))
     {
-        USBPcapBufferCompletePendedReadIrp(pRootData);
+        USBPcapBufferCompletePendedReadIrp(pRootData, irql);
+    }
+    else
+    {
+        KeReleaseSpinLock(&pRootData->bufferLock, irql);
     }
 
     return status;
