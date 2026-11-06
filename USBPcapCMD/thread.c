@@ -90,6 +90,36 @@ HANDLE create_filter_read_handle(struct thread_data *data)
         goto finish;
     }
 
+    /* Apply capture exclusions, if any. */
+    {
+        int i;
+        BOOL has_exclude = FALSE;
+
+        for (i = 0; i < 4; i++)
+        {
+            if (data->exclude.addresses[i] != 0)
+            {
+                has_exclude = TRUE;
+            }
+        }
+
+        if (has_exclude == TRUE)
+        {
+            if (!DeviceIoControl(filter_handle,
+                                 IOCTL_USBPCAP_SET_EXCLUDE_FILTER,
+                                 &data->exclude,
+                                 sizeof(USBPCAP_ADDRESS_FILTER),
+                                 NULL,
+                                 0,
+                                 &bytes_ret,
+                                 0))
+            {
+                fprintf(stderr, "Failed to set exclusion filter - %d\n", GetLastError());
+                goto finish;
+            }
+        }
+    }
+
     free(inBuf);
     return filter_handle;
 

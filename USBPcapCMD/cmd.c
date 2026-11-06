@@ -10,12 +10,14 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <Shellapi.h>
 #include <Shlwapi.h>
 #include <Usbiodef.h>
 #include "filters.h"
 #include "thread.h"
 #include "enum.h"
+#include "volume.h"
 #include "getopt.h"
 #include "roothubs.h"
 #include "version.h"
@@ -349,6 +351,7 @@ static BOOL generate_worker_command_line(struct thread_data *data,
 #define WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL L" --capture-from-all-devices"
 #define WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW L" --capture-from-new-devices"
 #define WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS L" --inject-descriptors"
+#define WORKER_CMD_LINE_FORMATTER_EXCLUDE L" --exclude-devices %S"
 
     cmdLineLen = MultiByteToWideChar(CP_ACP, 0, data->device, -1, NULL, 0);
     cmdLineLen += (pipeName == NULL) ? strlen(data->filename) : wcslen(pipeName);
@@ -362,6 +365,8 @@ static BOOL generate_worker_command_line(struct thread_data *data,
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW);
     cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS);
     cmdLineLen += (data->address_list == NULL) ? 0 : strlen(data->address_list);
+    cmdLineLen += wcslen(WORKER_CMD_LINE_FORMATTER_EXCLUDE);
+    cmdLineLen += 512 /* maximum exclude list string */;
 
     cmdLine = (PWSTR)malloc(cmdLineLen * sizeof(WCHAR));
 
@@ -428,9 +433,42 @@ static BOOL generate_worker_command_line(struct thread_data *data,
                              cmdLineLen - nChars,
                              WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS);
     }
+
+    if (data->exclude_set == TRUE)
+    {
+        char excludeList[512];
+        int addr;
+        size_t len = 0;
+
+        excludeList[0] = '\0';
+        for (addr = 0; addr <= 127; addr++)
+        {
+            char one[8];
+            if (USBPcapIsDeviceFiltered(&data->exclude, addr) == TRUE)
+            {
+                if (len != 0)
+                {
+                    excludeList[len] = ',';
+                    len++;
+                }
+                sprintf(one, "%d", addr);
+                strcpy(&excludeList[len], one);
+                len += strlen(one);
+            }
+        }
+
+        if (len != 0)
+        {
+            nChars += swprintf_s(&cmdLine[nChars],
+                                 cmdLineLen - nChars,
+                                 WORKER_CMD_LINE_FORMATTER_EXCLUDE,
+                                 excludeList);
+        }
+    }
 #undef WORKER_CMD_LINE_FORMATTER_PIPE
 #undef WORKER_CMD_LINE_FORMATTER
 
+#undef WORKER_CMD_LINE_FORMATTER_EXCLUDE
 #undef WORKER_CMD_LINE_FORMATTER_INJECT_DESCRIPTORS
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_NEW
 #undef WORKER_CMD_LINE_FORMATTER_CAPTURE_ALL
@@ -575,6 +613,8 @@ int cmd_interactive(struct thread_data *data)
     char buffer[INPUT_BUFFER_SIZE];
     BOOL finished;
     BOOL exit = FALSE;
+    char *bootInstance;
+    char *bootDriverKey;
 
     /* Detach from parent console window. Make sure to reopen stdout
      * and stderr as otherwise wide_print() does not corectly detect
@@ -656,11 +696,36 @@ int cmd_interactive(struct thread_data *data)
     }
 
     printf("Following filter control devices are available:\n");
+    USBPcapGetBootVolumeIdentity(&bootInstance, &bootDriverKey);
+    if (bootInstance != NULL)
+    {
+        printf("Boot volume: %s (driver key %s)\n", bootInstance,
+               bootDriverKey ? bootDriverKey : "(unreadable)");
+    }
     while (usbpcapFilters[i] != NULL)
     {
+        USHORT bootAddress = 0;
+
         printf("%d %s\n", i+1, usbpcapFilters[i]->device);
         enumerate_print_usbpcap_interactive(usbpcapFilters[i]->device);
+        if (bootDriverKey != NULL &&
+            enumerate_find_address_by_driver_key(usbpcapFilters[i]->device,
+                                                 bootDriverKey,
+                                                 &bootAddress) == TRUE)
+        {
+            printf("  ^ boot volume device is on THIS hub, address %d - "
+                   "captures on it auto-exclude the boot disk.\n",
+                   (int)bootAddress);
+        }
         i++;
+    }
+    if (bootInstance != NULL)
+    {
+        free(bootInstance);
+    }
+    if (bootDriverKey != NULL)
+    {
+        free(bootDriverKey);
     }
 
     max_i = i;
@@ -725,8 +790,18 @@ int cmd_interactive(struct thread_data *data)
                     break;
                 }
             }
-            data->filename = _strdup(buffer);
-            finished = TRUE;
+
+            if (USBPcapIsRemoteDrivePath(buffer) == TRUE)
+            {
+                printf("Mapped network drives are not visible to the elevated\n"
+                       "worker process, writing captures there fails.\n"
+                       "Use a local path or a UNC path (\\\\server\\share\\file.pcap).\n");
+            }
+            else
+            {
+                data->filename = _strdup(buffer);
+                finished = TRUE;
+            }
         }
     } while (finished == FALSE);
 
@@ -847,6 +922,29 @@ static void start_capture(struct thread_data *data)
         return;
     }
 
+    /* Compute automatic exclusions unless they were already set (the
+     * elevated worker receives them via the command line). */
+    if (data->exclude_set == FALSE)
+    {
+        memset(&data->exclude, 0, sizeof(data->exclude));
+        if (data->no_exclude == FALSE)
+        {
+            data->exclude_count = USBPcapComputeCaptureExclusions(data->device,
+                                                                  data->filename,
+                                                                  &data->exclude);
+            if (data->exclude_count > 0)
+            {
+                printf("Excluding %d address(es) (boot volume / output volume) from capture.\n",
+                       data->exclude_count);
+            }
+            else
+            {
+                printf("No devices were auto-excluded from this capture.\n");
+            }
+        }
+        data->exclude_set = TRUE;
+    }
+
     data->exit_event = CreateEvent(NULL, /* Handle cannot be inherited */
                                    TRUE, /* Manual Reset */
                                    FALSE, /* Default to not signalled */
@@ -870,6 +968,20 @@ static void start_capture(struct thread_data *data)
                                              CREATE_NEW,
                                              FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED,
                                              NULL);
+            if (data->write_handle == INVALID_HANDLE_VALUE)
+            {
+                fprintf(stderr,
+                        "Cannot create output file '%s' (error %d).\n"
+                        "Note: mapped network drives are not visible to elevated\n"
+                        "processes. Use a local path or a UNC path\n"
+                        "(\\\\server\\share\\capture.pcap).\n",
+                        data->filename,
+                        GetLastError());
+                /* Signal immediate exit without starting the capture:
+                 * do not leave the worker (and the caller) hanging. */
+                SetEvent(data->exit_event);
+                return;
+            }
         }
 
         if (data->inject_descriptors)
@@ -1344,6 +1456,11 @@ static void print_help(void)
            "    List is comma separated list of values. Example --devices 1,2,3.\n"
            "  --inject-descriptors\n"
            "    Inject already connected devices descriptors into capture data.\n"
+           "  --no-exclude\n"
+           "    Disables automatic exclusion of the boot volume and output file\n"
+           "    devices from the capture (matters on systems that boot from USB).\n"
+           "  --exclude-devices <list>\n"
+           "    Internal: exclusion list passed to the elevated worker.\n"
            "  -I,  --init-non-standard-hwids\n"
            "    Initializes NonStandardHWIDs registry key used by USBPcapDriver.\n"
            "    This registry key is needed for USB 3.0 capture.\n");
@@ -1353,6 +1470,8 @@ static void print_help(void)
 #define ARG_DEVICES                    900
 #define ARG_CAPTURE_FROM_NEW_DEVICES   901
 #define ARG_INJECT_DESCRIPTORS         902
+#define ARG_NO_EXCLUDE                 903
+#define ARG_EXCLUDE_DEVICES            904
 #define ARG_EXTCAP_VERSION            1000
 #define ARG_EXTCAP_INTERFACES         1001
 #define ARG_EXTCAP_INTERFACE          1002
@@ -1382,6 +1501,8 @@ int __cdecl main(int argc, CHAR **argv)
         {"capture-from-all-devices", no_argument, 0, 'A'},
         {"capture-from-new-devices", no_argument, 0, ARG_CAPTURE_FROM_NEW_DEVICES},
         {"inject-descriptors", no_argument, 0, ARG_INJECT_DESCRIPTORS},
+        {"exclude-devices", required_argument, 0, ARG_EXCLUDE_DEVICES},
+        {"no-exclude", no_argument, 0, ARG_NO_EXCLUDE},
         /* Extcap interface. Please note that there are no short
          * options for these and the numbers are just gopt keys.
          */
@@ -1412,6 +1533,10 @@ int __cdecl main(int argc, CHAR **argv)
     data.read_handle = INVALID_HANDLE_VALUE;
     data.write_handle = INVALID_HANDLE_VALUE;
     data.exit_event = INVALID_HANDLE_VALUE;
+    memset(&data.exclude, 0, sizeof(data.exclude));
+    data.exclude_set = FALSE;
+    data.no_exclude = FALSE;
+    data.exclude_count = 0;
 
     while (-1 != (c = getopt_long(argc, argv, "hd:o:s:b:IA", long_options, &option_index)))
     {
@@ -1467,6 +1592,15 @@ int __cdecl main(int argc, CHAR **argv)
                 break;
             case ARG_INJECT_DESCRIPTORS:
                 data.inject_descriptors = TRUE;
+                break;
+            case ARG_NO_EXCLUDE:
+                data.no_exclude = TRUE;
+                break;
+            case ARG_EXCLUDE_DEVICES:
+                /* Used by the elevated worker: exclusions computed by the
+                 * caller process are passed on the command line. */
+                USBPcapInitAddressFilter(&data.exclude, optarg, FALSE);
+                data.exclude_set = TRUE;
                 break;
             case ARG_EXTCAP_VERSION:
                 do_extcap_version = 1;
