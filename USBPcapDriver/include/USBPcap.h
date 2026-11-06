@@ -20,7 +20,12 @@ typedef struct
 
 #pragma pack(push)
 #pragma pack(1)
-/* USBPCAP_ADDRESS_FILTER is parameter structure to IOCTL_USBPCAP_START_FILTERING. */
+/* USBPCAP_ADDRESS_FILTER is parameter structure to IOCTL_USBPCAP_START_FILTERING.
+ * It is also the parameter structure to IOCTL_USBPCAP_SET_EXCLUDE_FILTER,
+ * which instructs the driver to never capture from the addresses set in the
+ * bitmap regardless of the filtering state (exclusions take precedence over
+ * the allow filter, including the address 0 auto-capture bit).
+ */
 typedef struct _USBPCAP_ADDRESS_FILTER
 {
     /* Individual device filter bit array. USB standard assigns device
@@ -55,6 +60,9 @@ typedef struct _USBPCAP_ADDRESS_FILTER
 
 #define IOCTL_USBPCAP_SET_SNAPLEN_SIZE \
     CTL_CODE(FILE_DEVICE_UNKNOWN, 0x804, METHOD_BUFFERED, FILE_READ_ACCESS)
+
+#define IOCTL_USBPCAP_SET_EXCLUDE_FILTER \
+    CTL_CODE(FILE_DEVICE_UNKNOWN, 0x805, METHOD_BUFFERED, FILE_READ_ACCESS | FILE_WRITE_ACCESS)
 
 /* USB packets, beginning with a USBPcap header */
 #define DLT_USBPCAP         249

@@ -18,4 +18,13 @@ void enumerate_print_usbpcap_interactive(const char *filter);
 void enumerate_print_extcap_config(const char *filter);
 void enumerate_all_connected_devices(const char *filter, EnumConnectedPortCallback cb, void *ctx);
 
+/*
+ * Finds the device address of the device with given instance ID on the
+ * given filter bus. Returns TRUE and sets *outAddress when found.
+ * instanceId is the device instance path, e.g. "USB\VID_05AC&PID_12A8\000000".
+ */
+BOOLEAN enumerate_find_address_by_driver_key(const char *filter,
+                                             const char *driverKey,
+                                             USHORT *outAddress);
+
 #endif /* USBPCAP_CMD_ENUM_H */

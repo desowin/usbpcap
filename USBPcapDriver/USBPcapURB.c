@@ -425,7 +425,7 @@ VOID USBPcapAnalyzeURB(PIRP pIrp, PURB pUrb, BOOLEAN post,
             break;
     }
 
-    if (USBPcapIsDeviceFiltered(&pDeviceData->pRootData->filter,
+    if (USBPcapIsDeviceFiltered(pDeviceData->pRootData,
                                 (int)pDeviceData->deviceAddress) == FALSE)
     {
         /* Do not log URBs from devices which are not being filtered */

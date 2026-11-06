@@ -42,6 +42,11 @@ struct thread_data
 
     BOOLEAN inject_descriptors; /* TRUE if descriptors should be injected into capture. */
     struct inject_descriptors descriptors;
+
+    USBPCAP_ADDRESS_FILTER exclude; /* Devices that must never be captured. */
+    BOOLEAN exclude_set; /* TRUE once exclusions are known (computed or passed on command line). */
+    BOOLEAN no_exclude; /* TRUE disables automatic exclusion computation. */
+    int exclude_count; /* Number of automatically excluded addresses. */
 };
 
 HANDLE create_filter_read_handle(struct thread_data *data);
