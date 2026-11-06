@@ -268,13 +268,24 @@ NTSTATUS AddDevice(IN PDRIVER_OBJECT pDrvObj,
         PUSBPCAP_ROOTHUB_DATA  pRootData;
         USHORT                 id;
 
-        ntStat = USBPcapCreateRootHubControlDevice(pDevExt,
-                                                   &control,
-                                                   &id);
-
         pRootData = pDevExt->context.usb.pDeviceData->pRootData;
-        pRootData->controlDevice = control;
-        pRootData->busId = id;
+
+        /* Failure to create the control device must not fail the hub start:
+         * failing here would make the system unbootable when the hub hosts
+         * the boot volume (Windows To Go). The hub keeps working, capture
+         * is just unavailable on this bus. */
+        if (NT_SUCCESS(USBPcapCreateRootHubControlDevice(pDevExt,
+                                                         &control,
+                                                         &id)))
+        {
+            pRootData->controlDevice = control;
+            pRootData->busId = id;
+        }
+        else
+        {
+            DkDbgStr("Failed to create control device - capture unavailable on this bus");
+            pRootData->controlDevice = NULL;
+        }
     }
 
 EndFunc:
