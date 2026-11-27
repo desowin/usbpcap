@@ -105,6 +105,8 @@ HandleUSBPcapControlIOCTL(PIRP pIrp, PIO_STACK_LOCATION pStack,
             DkDbgStr("IOCTL_USBPCAP_STOP_FILTERING");
             memset(&pRootData->filter, 0,
                    sizeof(USBPCAP_ADDRESS_FILTER));
+            memset(&pRootData->exclude, 0,
+                   sizeof(USBPCAP_ADDRESS_FILTER));
             break;
 
         case IOCTL_USBPCAP_SET_SNAPLEN_SIZE:
@@ -122,6 +124,29 @@ HandleUSBPcapControlIOCTL(PIRP pIrp, PIO_STACK_LOCATION pStack,
             DkDbgVal("IOCTL_USBPCAP_SET_SNAPLEN_SIZE", pSnaplen->size);
 
             ntStat = USBPcapSetSnaplenSize(pRootData, pSnaplen->size);
+            break;
+        }
+
+        case IOCTL_USBPCAP_SET_EXCLUDE_FILTER:
+        {
+            PUSBPCAP_ADDRESS_FILTER pExcludeFilter;
+
+            if (pStack->Parameters.DeviceIoControl.InputBufferLength !=
+                sizeof(USBPCAP_ADDRESS_FILTER))
+            {
+                ntStat = STATUS_INVALID_PARAMETER;
+                break;
+            }
+
+            pExcludeFilter = (PUSBPCAP_ADDRESS_FILTER)pIrp->AssociatedIrp.SystemBuffer;
+            memcpy(&pRootData->exclude, pExcludeFilter,
+                   sizeof(USBPCAP_ADDRESS_FILTER));
+
+            DkDbgStr("IOCTL_USBPCAP_SET_EXCLUDE_FILTER");
+            DkDbgVal("", pExcludeFilter->addresses[0]);
+            DkDbgVal("", pExcludeFilter->addresses[1]);
+            DkDbgVal("", pExcludeFilter->addresses[2]);
+            DkDbgVal("", pExcludeFilter->addresses[3]);
             break;
         }
 

@@ -28,7 +28,7 @@ BOOLEAN USBPcapIsDeviceRootHub(PDEVICE_OBJECT device);
 PWSTR USBPcapGetHubInterfaces(PDEVICE_OBJECT hub);
 
 
-BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address);
+BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ROOTHUB_DATA pRootData, int address);
 BOOLEAN USBPcapSetDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address);
 
 LARGE_INTEGER USBPcapGetCurrentTimestamp(VOID);

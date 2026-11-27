@@ -241,7 +241,6 @@ void print_usbpcapcmd(ULONG level, ULONG port, TCHAR display[MAX_DEVICE_ID_LEN],
                       USHORT deviceAddress, USHORT parentAddress,
                       ULONG node, ULONG parentNode)
 {
-    (void)deviceAddress;
     (void)parentAddress;
     (void)node;
     (void)parentNode;
@@ -251,6 +250,10 @@ void print_usbpcapcmd(ULONG level, ULONG port, TCHAR display[MAX_DEVICE_ID_LEN],
         printf("[Port %d] ", port);
     }
     wide_print((PWSTR)display);
+    if (deviceAddress != (USHORT)-1)
+    {
+        printf(" [addr %d]", (int)deviceAddress);
+    }
     printf("\n");
 }
 
@@ -1073,4 +1076,65 @@ void enumerate_all_connected_devices(const char *filter, EnumConnectedPortCallba
         EnumerateHub(str, NULL, 0, NULL, cb, ctx);
         GlobalFree(str);
     }
+}
+
+typedef struct _FindDriverKeyContext
+{
+    const char *driverKey;
+    USHORT      address;
+    BOOLEAN     found;
+} FindDriverKeyContext;
+
+/*
+ * Called for every connected device on the filter's bus. The driver key
+ * name reported by the hub (IOCTL_USB_GET_NODE_CONNECTION_DRIVERKEY_NAME)
+ * is in the same namespace as CM_DRP_DRIVER of the device devnode - that
+ * correspondence is the whole matching mechanism; device instance IDs are
+ * a DIFFERENT namespace and must not be compared against it.
+ */
+static void FindDriverKeyPortCallback(HANDLE hub, ULONG port,
+                                      USHORT deviceAddress,
+                                      PUSB_DEVICE_DESCRIPTOR desc,
+                                      void *ctx)
+{
+    FindDriverKeyContext *context = (FindDriverKeyContext *)ctx;
+    PTSTR keyName;
+
+    (void)desc;
+
+    if (context->found == TRUE)
+    {
+        return;
+    }
+
+    keyName = GetDriverKeyName(hub, port);
+    if (keyName != NULL)
+    {
+        if (_stricmp(keyName, context->driverKey) == 0)
+        {
+            context->found = TRUE;
+            context->address = deviceAddress;
+        }
+        GlobalFree(keyName);
+    }
+}
+
+BOOLEAN enumerate_find_address_by_driver_key(const char *filter,
+                                             const char *driverKey,
+                                             USHORT *outAddress)
+{
+    FindDriverKeyContext context;
+
+    context.driverKey = driverKey;
+    context.address = 0;
+    context.found = FALSE;
+
+    enumerate_all_connected_devices(filter, FindDriverKeyPortCallback, &context);
+
+    if ((context.found == TRUE) && (outAddress != NULL))
+    {
+        *outAddress = context.address;
+    }
+
+    return context.found;
 }

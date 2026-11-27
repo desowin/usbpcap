@@ -146,6 +146,8 @@ static NTSTATUS USBPcapAllocateDeviceData(IN PDEVICE_EXTENSION pDevExt,
                 /* Setup initial filtering state to FALSE */
                 memset(&pDeviceData->pRootData->filter, 0,
                        sizeof(USBPCAP_ADDRESS_FILTER));
+                memset(&pDeviceData->pRootData->exclude, 0,
+                       sizeof(USBPCAP_ADDRESS_FILTER));
 
                 /*
                  * Set the reference count

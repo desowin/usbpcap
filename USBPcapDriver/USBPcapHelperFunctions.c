@@ -705,7 +705,7 @@ NTSTATUS USBPcapGetDeviceUSBInfo(PDEVICE_EXTENSION pDevExt)
 
         /* Set device filtered if capture from new devices is enabled. */
         pRootData = pDevExt->context.usb.pDeviceData->pRootData;
-        if (USBPcapIsDeviceFiltered(&pRootData->filter, 0))
+        if (USBPcapIsDeviceFiltered(pRootData, 0))
         {
             USBPcapSetDeviceFiltered(&pRootData->filter, info.DeviceAddress);
         }
@@ -981,15 +981,25 @@ static BOOLEAN USBPcapGetAddressRangeAndIndex(int address, UINT8 *range, UINT8 *
     return TRUE;
 }
 
-BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address)
+BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ROOTHUB_DATA pRootData, int address)
 {
     BOOLEAN filtered = FALSE;
     UINT8 range;
     UINT8 index;
 
-    ASSERT(filter != NULL);
+    ASSERT(pRootData != NULL);
 
-    if (filter->filterAll == TRUE)
+    /* Devices present in the exclusion bitmap are never captured,
+     * regardless of the filter state. */
+    if (USBPcapGetAddressRangeAndIndex(address, &range, &index) == TRUE)
+    {
+        if (pRootData->exclude.addresses[range] & (1 << index))
+        {
+            return FALSE;
+        }
+    }
+
+    if (pRootData->filter.filterAll == TRUE)
     {
         /* Do not check individual bit if all devices are filtered. */
         return TRUE;
@@ -1001,7 +1011,7 @@ BOOLEAN USBPcapIsDeviceFiltered(PUSBPCAP_ADDRESS_FILTER filter, int address)
         return TRUE;
     }
 
-    if (filter->addresses[range] & (1 << index))
+    if (pRootData->filter.addresses[range] & (1 << index))
     {
         filtered = TRUE;
     }

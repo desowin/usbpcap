@@ -50,6 +50,11 @@ typedef struct _USBPCAP_ROOTHUB_DATA
     /* Address filter. See include\USBPcap.h for more information. */
     USBPCAP_ADDRESS_FILTER filter;
 
+    /* Devices that must never be captured (overrides filter). Used to
+     * exclude e.g. the volumes hosting the OS and the output file on
+     * systems that boot from USB (Windows To Go). */
+    USBPCAP_ADDRESS_FILTER exclude;
+
     /* Reference count. To be used only with InterlockedXXX calls. */
     volatile LONG          refCount;
 
