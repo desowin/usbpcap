@@ -31,4 +31,5 @@ SOURCES = USBPcapCMD.rc \
           getopt.c \
           iocontrol.c \
           roothubs.c \
-          thread.c
+          thread.c \
+          volume.c

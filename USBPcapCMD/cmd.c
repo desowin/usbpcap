@@ -10,12 +10,14 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <Shellapi.h>
 #include <Shlwapi.h>
 #include <Usbiodef.h>
 #include "filters.h"
 #include "thread.h"
 #include "enum.h"
+#include "volume.h"
 #include "getopt.h"
 #include "roothubs.h"
 #include "version.h"
@@ -725,8 +727,18 @@ int cmd_interactive(struct thread_data *data)
                     break;
                 }
             }
-            data->filename = _strdup(buffer);
-            finished = TRUE;
+
+            if (USBPcapIsRemoteDrivePath(buffer) == TRUE)
+            {
+                printf("Mapped network drives are not visible to the elevated\n"
+                       "worker process, writing captures there fails.\n"
+                       "Use a local path or a UNC path (\\\\server\\share\\file.pcap).\n");
+            }
+            else
+            {
+                data->filename = _strdup(buffer);
+                finished = TRUE;
+            }
         }
     } while (finished == FALSE);
 
@@ -870,6 +882,20 @@ static void start_capture(struct thread_data *data)
                                              CREATE_NEW,
                                              FILE_ATTRIBUTE_NORMAL|FILE_FLAG_OVERLAPPED,
                                              NULL);
+            if (data->write_handle == INVALID_HANDLE_VALUE)
+            {
+                fprintf(stderr,
+                        "Cannot create output file '%s' (error %d).\n"
+                        "Note: mapped network drives are not visible to elevated\n"
+                        "processes. Use a local path or a UNC path\n"
+                        "(\\\\server\\share\\capture.pcap).\n",
+                        data->filename,
+                        GetLastError());
+                /* Signal immediate exit without starting the capture:
+                 * do not leave the worker (and the caller) hanging. */
+                SetEvent(data->exit_event);
+                return;
+            }
         }
 
         if (data->inject_descriptors)
