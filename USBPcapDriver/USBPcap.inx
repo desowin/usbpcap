@@ -55,7 +55,11 @@ DelService = USBPcap,0x00000200
 [Service.AddService]
 DisplayName    = %USBPcap.SvcDesc%
 ServiceType    = 1               ; SERVICE_KERNEL_DRIVER
-StartType      = 3               ; SERVICE_DEMAND_START
+; SERVICE_BOOT_START is required for the filter to work on systems that
+; boot from USB (Windows To Go): the filter is part of the boot-critical
+; USB hub device stack and must be preloaded by the boot loader.
+; See https://github.com/desowin/usbpcap/issues/61 and #116.
+StartType      = 0               ; SERVICE_BOOT_START
 ErrorControl   = 2               ; SERVICE_ERROR_SEVERE
 ServiceBinary  = %12%\USBPcap.sys
 

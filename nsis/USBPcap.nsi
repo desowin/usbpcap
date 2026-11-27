@@ -158,12 +158,14 @@ no_removal_pending:
     StrCpy $INSTDIR "$PROGRAMFILES\USBPcap"
   ${EndIf}
 
-  ; Windows To Go is not supported
+  ; Windows To Go (and any other system that boots from USB) is supported:
+  ; the driver service is registered as boot-start (SERVICE_BOOT_START),
+  ; which is required for the filter to load on systems where the
+  ; boot-critical USB hub stack hosts the boot volume.
   ClearErrors
   ReadRegDWORD $0 HKLM "SYSTEM\CurrentControlSet\Control" "PortableOperatingSystem"
   ${If} $0 <> 0
-    MessageBox MB_OK "USBPcap cannot be installed on Windows To Go."
-    Quit
+    MessageBox MB_OK "Windows To Go detected.$\r$\nUSBPcap will register its driver as boot-start (SERVICE_BOOT_START), required for USB-booted systems.$\r$\nMake sure to reboot after installation." /SD IDOK
   ${EndIf}
 
   Pop $R0
